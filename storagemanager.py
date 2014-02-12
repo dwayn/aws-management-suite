@@ -266,6 +266,7 @@ class StorageManager:
 
         print "Volume group {0} mounted on {1} ({2}) at {3}".format(volume_group_id, host, instance_id, mount_point)
 
+        #TODO add the entries to to /etc/mdadm.conf so the raid device is initialized on boot
         # add entry to fstab for automounting the volume
         if automount:
             sh.sudo(command="cp /etc/fstab /etc/fstab.prev", sudo_password=settings.SUDO_PASSWORD)
