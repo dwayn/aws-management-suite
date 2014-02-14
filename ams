@@ -1,0 +1,218 @@
+#!/usr/bin/env python
+import argparse
+import MySQLdb
+import settings
+from storagemanager import StorageManager
+
+dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
+                     port=settings.TRACKING_DB['port'],
+                     user=settings.TRACKING_DB['user'],
+                     passwd=settings.TRACKING_DB['pass'],
+                     db=settings.TRACKING_DB['dbname'])
+db = dbconn.cursor()
+
+human_output = True
+sm = StorageManager()
+
+
+
+def host_list(args):
+    whereclauses = []
+    if args.search_field:
+        if args.like:
+            whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.like))
+        elif args.prefix:
+            whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.prefix))
+    if args.zone:
+        whereclauses.append("availability_zone like '{0}%'".format(args.zone))
+
+    sql = "select host, instance_id, availability_zone from hosts"
+    if len(whereclauses):
+        sql += " where " + " and ".join(whereclauses)
+    db.execute(sql)
+    results = db.fetchall()
+
+    if human_output:
+        print "Hosts found:\n"
+        print "Hostname\tinstance_id\tavailability_zone"
+        print "--------------------------------------------------------------"
+    for res in results:
+        print "{0}\t{1}\t{2}".format(res[0], res[1], res[2])
+    if human_output:
+        print "--------------------------------------------------------------"
+
+
+def volume_list(args):
+    whereclauses = []
+    if args.search_field:
+        if args.search_field in ('host', 'instance_id'):
+            args.search_field = "h." + args.search_field
+        if args.like:
+            whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.like))
+        elif args.prefix:
+            whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.prefix))
+    if args.zone:
+        whereclauses.append("h.availability_zone like '{0}%'".format(args.zone))
+
+    sql = "select " \
+            "host, " \
+            "h.instance_id, " \
+            "h.availability_zone, " \
+            "vg.volume_group_id, " \
+            "count(*) as volumes_in_group, " \
+            "raid_level, " \
+            "sum(size) as GiB, " \
+            "piops " \
+            "from " \
+            "hosts h " \
+            "left join host_volumes hv on h.instance_id=hv.instance_id " \
+            "left join volume_groups vg on vg.volume_group_id=hv.volume_group_id " \
+            "left join volumes v on v.volume_group_id=vg.volume_group_id"
+
+    if len(whereclauses):
+        sql += " where " + " and ".join(whereclauses)
+    sql += " group by vg.volume_group_id"
+    db.execute(sql)
+    results = db.fetchall()
+
+    if human_output:
+        print "Volumes found:\n"
+        print "Hostname\tinstance_id\tavailability_zone\tvolume_group_id\tvolumes_in_group\traid_level\tGiB\tiops"
+        print "--------------------------------------------------------------"
+    for res in results:
+        print "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7])
+    if human_output:
+        print "--------------------------------------------------------------"
+
+
+def volume_create(args):
+    print "volume create function"
+
+def volume_attach(args):
+    print "volume attach function"
+
+def snapshot_create_volume(args):
+    sm.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
+
+
+def snapshot_create_host(args):
+    whereclauses = []
+    if args.instance:
+        whereclauses.append("h.instance_id = '{}'".format(args.instance))
+    elif args.host:
+        whereclauses.append("h.host = '{}'".format(args.host))
+
+    if args.mount_point:
+        whereclauses.append("hv.mount_point = '{}'".format(args.mount_point))
+    elif args.block_device:
+        whereclauses.append("vg.block_device = '{}'".format(args.block_device))
+
+    sql = "select " \
+          "hv.volume_group_id " \
+          "from " \
+          "hosts h " \
+          "left join host_volumes hv on h.instance_id=hv.instance_id " \
+          "left join volume_groups vg on vg.volume_group_id = hv.volume_group_id"
+    sql += " where " + " and ".join(whereclauses)
+    db.execute(sql)
+    res = db.fetchone()
+    if res:
+        sm.snapshot_volume_group(res[0], args.description, args.pre, args.post)
+    else:
+        print "Volume group not found"
+        exit(1)
+
+
+def main():
+    global human_output
+    parser = argparse.ArgumentParser(prog="ams")
+    parser.add_argument("-q", "--scriptable-output", action='store_true', help="removes human readability formatting for scripting purposes")
+    #parser.add_argument("type", help="resource type to manage")
+    #parser.add_argument("action", help="action to take on resource")
+    subparsers = parser.add_subparsers(title="type", dest='type')
+
+
+    hparser = subparsers.add_parser("host", help="direct host/instance related operations")
+    hsubparser = hparser.add_subparsers(title="action", dest='action')
+    hlistparser = hsubparser.add_parser("list")
+    hlistparser.add_argument('search_field', nargs="?", help="field to search", choices=['host', 'instance_id'])
+    hlistparser.add_argument("--like", help="string to find within 'search-field'")
+    hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
+    hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
+    hlistparser.set_defaults(func=host_list)
+
+
+
+    vparser = subparsers.add_parser("volume", help="EBS volume and software raid operations")
+    vsubparser = vparser.add_subparsers(title="action", dest='action')
+
+    vlistparser = vsubparser.add_parser("list")
+    vlistparser.add_argument('search_field', nargs="?", help="field to search", choices=['host', 'instance_id'])
+    vlistparser.add_argument("--like", help="search string to use when listing resources")
+    vlistparser.add_argument("--prefix", help="search string prefix to use when listing resources")
+    vlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
+    vlistparser.set_defaults(func=volume_list)
+
+    vcreateparser = vsubparser.add_parser("create", help="Create new volume group.")
+    vcreategroup = vcreateparser.add_mutually_exclusive_group(required=True)
+    vcreategroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
+    vcreategroup.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
+    vcreateparser.add_argument('-n', '--numvols', type=int, help="Number of EBS volumes to create for the new volume group", required=True)
+    vcreateparser.add_argument('-r', '--raid-level', type=int, help="Set the raid level for new EBS raid", default=0, choices=[0,1,5,10])
+    vcreateparser.add_argument('-b', '--stripe-block-size', type=int, help="Set the stripe block/chunk size for new EBS raid", default=256)
+    vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
+    vcreateparser.add_argument('-a', '--no-automount', help="Configure the OS to automatically mount the volume group on reboot", action='store_true')
+    #TODO should filesystem be a limited list?
+    vcreateparser.add_argument('-f', '--filesystem', help="Filesystem to partition new raid/volume", default="xfs")
+    vcreateparser.add_argument('-s', '--size', type=int, help="Per EBS volume size in GiBs", required=True)
+    vcreateparser.add_argument('-p', '--iops', type=int, help="Per EBS volume provisioned iops")
+    vcreateparser.set_defaults(func=volume_create)
+
+    vcreateparser = vsubparser.add_parser("attach", help="Attach, assemble (if necessary) and mount(optional) a volume group")
+    vcreategroup = vcreateparser.add_mutually_exclusive_group(required=True)
+    vcreateparser.add_argument('volume_group_id', type=int, help="ID of the volume group to attach to instance")
+    vcreategroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
+    vcreategroup.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
+    vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
+    vcreateparser.add_argument('-a', '--no-automount', help="Configure the OS to automatically mount the volume group on reboot", action='store_true')
+    vcreateparser.set_defaults(func=volume_attach)
+
+
+    sparser = subparsers.add_parser("snapshot", help="EBS snapshot management operations")
+    ssubparser = sparser.add_subparsers(title="action", dest='action')
+
+    screateparser = ssubparser.add_parser("create", help="Create a snapshot group of a volume group")
+    screatesubparser = screateparser.add_subparsers(title="resource", dest='resource')
+    screatevolparser = screatesubparser.add_parser("volume", help="create a snapshot of a given volume_group_id")
+    screatevolparser.add_argument('volume_group_id', type=int, help="ID of the volume group to snapshot")
+    screatevolparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
+    screatevolparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
+    screatevolparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
+    screatevolparser.set_defaults(func=snapshot_create_volume)
+    screatehostparser = screatesubparser.add_parser("host", help="create a snapshot of a specific volume group on a host")
+    group = screatehostparser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
+    group.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
+    group = screatehostparser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-m', '--mount-point', help="mount point of the volume group to snapshot")
+    group.add_argument('-b', '--block-device', help="block device of the volume group to snapshot")
+    screatehostparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
+    screatehostparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
+    screatehostparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
+    screatehostparser.set_defaults(func=snapshot_create_host)
+
+
+
+    args = parser.parse_args()
+
+    print args
+    if args.scriptable_output:
+        human_output = False
+    #dispatch(args)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
+
+

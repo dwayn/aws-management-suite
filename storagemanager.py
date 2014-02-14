@@ -19,9 +19,6 @@ class StorageManager:
                              passwd=settings.TRACKING_DB['pass'],
                              db=settings.TRACKING_DB['dbname'])
         self.__db = self.__dbconn.cursor()
-        for name in settings.ENV_VARS:
-            if settings.ENV_VARS[name]:
-                os.environ[name] = settings.ENV_VARS[name]
 
         self.__boto_conns = {}
 
@@ -153,6 +150,7 @@ class StorageManager:
 
 
     def assemble_raid(self, instance_id, volume_group_id, new_raid=False):
+        #TODO check that the volumes are attached
         self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", instance_id)
         data = self.__db.fetchone()
         if not data:
@@ -233,6 +231,7 @@ class StorageManager:
 
     def mount_volume_group(self, instance_id, volume_group_id, mount_point='/data', automount=True):
         #TODO at some point these should probably be configurable
+        #TODO check that volume group is attached and assembled
         mount_options = 'noatime,nodiratime,noauto'
 
         self.__db.execute("select "
