@@ -32,7 +32,7 @@ class StorageManager:
     # provisions ebs volumes, attaches them to a host and create the software raid on the instance
     def create_volume_group(self, instance_id, num_volumes, per_volume_size, filesystem, raid_level=0, stripe_block_size=256, piops=None, tags=None):
         #TODO add support to hosts to know if iops are/can be enabled
-        self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", instance_id)
+        self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
         data = self.__db.fetchone()
         if not data:
             raise InstanceNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
@@ -72,7 +72,7 @@ class StorageManager:
                           "v.availability_zone "
                           "from volume_groups vg join volumes v on vg.volume_group_id = v.volume_group_id "
                           "where vg.volume_group_id=%s "
-                          "order by raid_device_id", volume_group_id)
+                          "order by raid_device_id", (volume_group_id, ))
         data = self.__db.fetchall()
 
         if not data:
@@ -151,7 +151,7 @@ class StorageManager:
 
     def assemble_raid(self, instance_id, volume_group_id, new_raid=False):
         #TODO check that the volumes are attached
-        self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", instance_id)
+        self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
         data = self.__db.fetchone()
         if not data:
             raise InstanceNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
@@ -167,7 +167,7 @@ class StorageManager:
                           "v.block_device, "
                           "v.raid_device_id "
                           "from volume_groups vg join volumes v on vg.volume_group_id = v.volume_group_id "
-                          "where vg.volume_group_id=%s order by raid_device_id", volume_group_id)
+                          "where vg.volume_group_id=%s order by raid_device_id", (volume_group_id, ))
         voldata = self.__db.fetchall()
 
         if not voldata:
@@ -294,7 +294,7 @@ class StorageManager:
                           "left join host_volumes hv on vg.volume_group_id = hv.volume_group_id "
                           "left join hosts h on h.instance_id = hv.instance_id "
                           "left join volumes v on v.volume_group_id=vg.volume_group_id "
-                          "where vg.volume_group_id = %s", (volume_group_id))
+                          "where vg.volume_group_id = %s", (volume_group_id, ))
         vgdata = self.__db.fetchone()
         if not vgdata:
             raise VolumeGroupNotFound("Volume group {0} not found".format(volume_group_id))
@@ -302,7 +302,7 @@ class StorageManager:
         region = vgdata[9][0:len(vgdata[9]) - 1]
         botoconn = self.__get_boto_conn(region)
 
-        self.__db.execute("select volume_id, size, piops, block_device, raid_device_id, tags from volumes where volume_group_id=%s", (volume_group_id))
+        self.__db.execute("select volume_id, size, piops, block_device, raid_device_id, tags from volumes where volume_group_id=%s", (volume_group_id, ))
         voldata = self.__db.fetchall()
         if not voldata:
             raise VolumeGroupNotFound("Error fetching volume information for volume group {0}".format(volume_group_id))
