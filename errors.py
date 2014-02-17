@@ -41,4 +41,8 @@ class SnapshotError(StorageManagerError):
 class SnapshotCreateError(SnapshotError):
     pass
 
+class SnapshotScheduleError(SnapshotError):
+    pass
+
+
 

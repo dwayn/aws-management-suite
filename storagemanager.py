@@ -7,8 +7,28 @@ import time
 from sshmanager import SSHManager
 import types
 from errors import *
+import datetime
 
 
+class SnapshotSchedule:
+    def __init__(self):
+        self.schedule_id = None
+        self.hostname = None
+        self.instance_id = None
+        self.mount_point = None
+        self.volume_group_id = None
+        self.interval_hour = 1
+        self.interval_day = 1
+        self.interval_week = 1
+        self.interval_month = 1
+        self.retain_hourly = 24
+        self.retain_daily = 14
+        self.retain_weekly = 4
+        self.retain_monthly = 12
+        self.retain_yearly = 3
+        self.pre_command = None
+        self.post_command = None
+        self.description = None
 
 
 class StorageManager:
@@ -275,7 +295,7 @@ class StorageManager:
     # pre_command and post_command can be a string containing a command to run using sudo on host, or they can be a callable function
     # if they are callable then these named parameters will be passed in:  hostname, instance_id
     # note that the pre/post commands will not be executed if the volume group is not attached to a host
-    def snapshot_volume_group(self, volume_group_id, description=None, pre_command=None, post_command=None):
+    def snapshot_volume_group(self, volume_group_id, description=None, pre_command=None, post_command=None, expiry_date=None):
         # lookup volume_group and instance_id (if attached)
         self.__db.execute("select "
                           "vg.volume_group_id, "
@@ -351,7 +371,7 @@ class StorageManager:
                 raise SnapshotCreateError("There was an error creating snapshot {0} for volume_group_id: {1}".format(snaps[vid].id, volume_group_id))
 
         # store the metadata for the snapshot group
-        self.store_snapshot_group(snapshots, volume_group_id, vgdata[3], vgdata[1], vgdata[2], vgdata[4], vgdata[6])
+        self.store_snapshot_group(snapshots, volume_group_id, vgdata[3], vgdata[1], vgdata[2], vgdata[4], vgdata[6], expiry_date)
 
         # run postcommand
         if attached:
@@ -406,7 +426,8 @@ class StorageManager:
         return volume_group_id
 
 
-    def store_snapshot_group(self, snapshots, volume_group_id, filesystem, raid_level=0, stripe_block_size=256, block_device=None, tags=None):
+    def store_snapshot_group(self, snapshots, volume_group_id, filesystem, raid_level=0, stripe_block_size=256, block_device=None, tags=None, expiry_date=None):
+        expdate = None
         raid_type = 'raid'
         if len(snapshots) == 1:
             raid_type = 'single'
@@ -420,15 +441,134 @@ class StorageManager:
         for x in range(0, len(snapshots)):
             snapshots[x]['snapshot_group_id'] = snapshot_group_id
             print snapshots[x]
-            self.__db.execute("INSERT INTO snapshots(snapshot_id, snapshot_group_id, volume_id, size, piops, block_device, raid_device_id, region, tags)"
-                              "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)", (snapshots[x]['snapshot_id'], snapshots[x]['snapshot_group_id'], snapshots[x]['volume_id'],
+
+            if expiry_date:
+                expdate = expiry_date.strftime('%Y-%m-%d %H:%M:%S')
+            self.__db.execute("INSERT INTO snapshots(snapshot_id, snapshot_group_id, volume_id, size, piops, block_device, raid_device_id, region, tags, expiry_date)"
+                              "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (snapshots[x]['snapshot_id'], snapshots[x]['snapshot_group_id'], snapshots[x]['volume_id'],
                                                                     snapshots[x]['size'], snapshots[x]['piops'], snapshots[x]['block_device'], snapshots[x]['raid_device_id'],
-                                                                    snapshots[x]['region'], snapshots[x]['tags']))
+                                                                    snapshots[x]['region'], snapshots[x]['tags'], expdate))
             self.__dbconn.commit()
 
 
         return snapshot_group_id
 
+
+    def schedule_snapshot(self, schedule):
+        if not isinstance(schedule, SnapshotSchedule):
+            raise SnapshotScheduleError("SnapshotSchedule object required")
+        insert_vars = []
+        sql = 'INSERT INTO snapshot_schedule set'
+        if schedule.hostname:
+            insert_vars.append(schedule.hostname)
+            sql += " hostname=%s"
+            if schedule.mount_point:
+                insert_vars.append(schedule.mount_point)
+                sql += ", mount_point=%s"
+            else:
+                raise SnapshotScheduleError("Expecting mount_point to be set when using hostname to schedule a snapshot")
+        elif schedule.instance_id:
+            insert_vars.append(schedule.instance_id)
+            sql += " instance_id=%s"
+            if schedule.mount_point:
+                insert_vars.append(schedule.mount_point)
+                sql += ", mount_point=%s"
+            else:
+                raise SnapshotScheduleError("Expecting mount_point to be set when using instance_id to schedule a snapshot")
+        elif schedule.volume_group_id:
+            insert_vars.append(schedule.volume_group_id)
+            sql += " volume_group_id=%s"
+        else:
+            raise SnapshotScheduleError("A snapshot must be scheduled for an instance_id, hostname or volume_group_id")
+
+        sql += ', interval_hour=%s, interval_day=%s, interval_week=%s, interval_month=%s, retain_hourly=%s, retain_daily=%s, retain_weekly=%s, retain_monthly=%s, retain_yearly=%s, pre_command=%s, post_command=%s, description=%s'
+        insert_vars.append(schedule.interval_hour)
+        insert_vars.append(schedule.interval_day)
+        insert_vars.append(schedule.interval_week)
+        insert_vars.append(schedule.interval_month)
+        insert_vars.append(schedule.retain_hourly)
+        insert_vars.append(schedule.retain_daily)
+        insert_vars.append(schedule.retain_weekly)
+        insert_vars.append(schedule.retain_monthly)
+        insert_vars.append(schedule.retain_yearly)
+        insert_vars.append(schedule.pre_command)
+        insert_vars.append(schedule.post_command)
+        insert_vars.append(schedule.description)
+
+        self.__db.execute(sql, insert_vars)
+        self.__dbconn.commit()
+        schedule.schedule_id = self.__db.lastrowid
+        return schedule
+
+    def run_snapshot_schedule(self, schedule_id=None):
+        t = datetime.datetime.today()
+        sql = "select " \
+                  "schedule_id," \
+                  "h.host," \
+                  "h.instance_id," \
+                  "hv.volume_group_id," \
+                  "hv.mount_point," \
+                  "ss.volume_group_id," \
+                  "interval_hour," \
+                  "interval_day," \
+                  "interval_week," \
+                  "interval_month," \
+                  "retain_hourly," \
+                  "retain_daily," \
+                  "retain_weekly," \
+                  "retain_monthly," \
+                  "retain_yearly," \
+                  "pre_command," \
+                  "post_command," \
+                  "description " \
+                  "from snapshot_schedule ss " \
+                  "left join hosts h on h.instance_id=ss.instance_id or h.host=ss.hostname " \
+                  "left join host_volumes hv on hv.instance_id=h.instance_id and hv.mount_point=ss.mount_point"
+
+        if schedule_id:
+            self.__db.execute(sql + " where schedule_id=%s", (schedule_id, ))
+            schedules = self.__db.fetchall()
+            if not schedules:
+                print "Schedule not found"
+                return
+        else:
+            self.__db.execute(sql)
+            schedules = self.__db.fetchall()
+            if not schedules:
+                print "No snapshot schedules found"
+                return
+
+        for schedule in schedules:
+            expiry_date = None
+
+            # hourly snapshot
+            if t.hour % schedule[6] == 0:
+                expiry_date = t + datetime.timedelta(hours=schedule[6]*schedule[10])
+
+            # daily snapshot
+            if t.hour == 0 and t.day % schedule[7] == 0:
+                expiry_date = t + datetime.timedelta(days=schedule[7]*schedule[11])
+
+            # weekly snapshot
+            if t.hour == 0 and t.weekday() == 0 and t.isocalendar()[1] % schedule[8] == 0:
+                expiry_date = t + datetime.timedelta(weeks=schedule[8]*schedule[12])
+
+            # monthly snapshot
+            if t.hour == 0 and t.day == 1 and t.month % schedule[9] == 0:
+                expiry_date = t + datetime.timedelta(days=schedule[9]*schedule[13]*30)
+
+            # yearly snapshot
+            if t.hour == 0 and t.day == 1 and t.month == 1:
+                expiry_date = t + datetime.timedelta(days=schedule[14]*365)
+
+            # if the snapshot should be done then an expiry_date should have been set, or if it was a manual snapshot then kick off the snapshot
+            if expiry_date or schedule_id:
+                if schedule[5]:
+                    volume_group_id = schedule[5]
+                else:
+                    volume_group_id = schedule[3]
+
+                self.snapshot_volume_group(volume_group_id=volume_group_id, description=schedule[17], pre_command=schedule[15], post_command=schedule[16], expiry_date=expiry_date)
 
 
     def get_volume_struct(self, volume_id, availability_zone, size, raid_device_id, block_device=None, piops=None, volume_group_id=None, tags=None):

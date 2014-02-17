@@ -70,3 +70,25 @@ CREATE TABLE `volumes` (
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`volume_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `snapshot_schedule` (
+  `schedule_id` int(11) NOT NULL AUTO_INCREMENT,
+  `hostname` varchar(100) DEFAULT NULL,
+  `instance_id` varchar(15) DEFAULT NULL,
+  `block_device` varchar(30) DEFAULT NULL,
+  `mount_point` varchar(50) DEFAULT NULL,
+  `volume_group_id` int(11) DEFAULT NULL,
+  `interval_hour` int(11) NOT NULL DEFAULT '1',
+  `interval_day` int(11) NOT NULL DEFAULT '1',
+  `interval_week` int(11) NOT NULL DEFAULT '1',
+  `interval_month` int(11) NOT NULL DEFAULT '1',
+  `retain_hourly` int(11) NOT NULL DEFAULT '24',
+  `retain_daily` int(11) NOT NULL DEFAULT '14',
+  `retain_weekly` int(11) NOT NULL DEFAULT '4',
+  `retain_monthly` int(11) NOT NULL DEFAULT '12',
+  `retain_yearly` int(11) NOT NULL DEFAULT '3',
+  `pre_command` varchar(256) DEFAULT NULL,
+  `post_command` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`schedule_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
