@@ -352,7 +352,7 @@ def main():
 
     args = parser.parse_args()
 
-    print args
+    # print args
     if args.scriptable_output:
         human_output = False
     #dispatch(args)
