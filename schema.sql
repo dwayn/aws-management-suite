@@ -71,7 +71,7 @@ CREATE TABLE `volumes` (
   PRIMARY KEY (`volume_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-CREATE TABLE `snapshot_schedule` (
+CREATE TABLE `snapshot_schedules` (
   `schedule_id` int(11) NOT NULL AUTO_INCREMENT,
   `hostname` varchar(100) DEFAULT NULL,
   `instance_id` varchar(15) DEFAULT NULL,

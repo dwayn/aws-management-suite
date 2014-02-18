@@ -458,7 +458,7 @@ class StorageManager:
         if not isinstance(schedule, SnapshotSchedule):
             raise SnapshotScheduleError("SnapshotSchedule object required")
         insert_vars = []
-        sql = 'INSERT INTO snapshot_schedule set'
+        sql = 'INSERT INTO snapshot_schedules set'
         if schedule.hostname:
             insert_vars.append(schedule.hostname)
             sql += " hostname=%s"
@@ -500,6 +500,27 @@ class StorageManager:
         schedule.schedule_id = self.__db.lastrowid
         return schedule
 
+    def delete_snapshot_schedule(self, schedule_id):
+        self.__db.execute("delete from snapshot_schedules where schedule_id=%s",(schedule_id, ))
+        self.__dbconn.commit()
+
+    def edit_snapshot_schedule(self, schedule_id, updates):
+        sql = "update snapshot_schedules set "
+        update_vars = []
+        sets = []
+        for name in updates.keys():
+            if name in ('pre_command', 'post_command', 'description') and updates[name] == "":
+                updates[name] = None
+            sets.append(str(name) + "=%s")
+            update_vars.append(updates[name])
+
+        sql += ', '.join(sets)
+        sql += " where schedule_id=%s"
+        update_vars.append(schedule_id)
+        self.__db.execute(sql, update_vars)
+        self.__dbconn.commit()
+
+
     def run_snapshot_schedule(self, schedule_id=None):
         t = datetime.datetime.today()
         sql = "select " \
@@ -521,7 +542,7 @@ class StorageManager:
                   "pre_command," \
                   "post_command," \
                   "description " \
-                  "from snapshot_schedule ss " \
+                  "from snapshot_schedules ss " \
                   "left join hosts h on h.instance_id=ss.instance_id or h.host=ss.hostname " \
                   "left join host_volumes hv on hv.instance_id=h.instance_id and hv.mount_point=ss.mount_point"
 
