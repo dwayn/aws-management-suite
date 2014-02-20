@@ -87,7 +87,20 @@ def volume_list(args):
 
 
 def volume_create(args):
-    print "volume create function"
+    automount = True
+    if args.no_automount:
+        automount = False
+    if args.instance:
+        instance_id = args.instance
+    elif args.host:
+        db.execute("select instance_id from hosts where host=%s", (args.host, ))
+        row = db.fetchone()
+        if not row:
+            print "Host {} not found".format(args.host)
+            return
+        instance_id = row[0]
+
+    sm.create_volume_group(instance_id, args.numvols, args.size, args.filesystem, args.raid_level, args.stripe_block_size, args.iops, None, args.mount_point, automount)
 
 def volume_attach(args):
     print "volume attach function"

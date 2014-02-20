@@ -50,7 +50,7 @@ class StorageManager:
 
 
     # provisions ebs volumes, attaches them to a host and create the software raid on the instance
-    def create_volume_group(self, instance_id, num_volumes, per_volume_size, filesystem, raid_level=0, stripe_block_size=256, piops=None, tags=None):
+    def create_volume_group(self, instance_id, num_volumes, per_volume_size, filesystem='xfs', raid_level=0, stripe_block_size=256, piops=None, tags=None, mount_point=None, automount=True):
         #TODO add support to hosts to know if iops are/can be enabled
         self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
         data = self.__db.fetchone()
@@ -71,16 +71,32 @@ class StorageManager:
             block_devices_in_use.append(str(dev))
 
 
+        vols = []
         volumes = []
         for x in range(0, num_volumes):
             vol = botoconn.create_volume(size=per_volume_size, zone=availability_zone, volume_type=volume_type, iops=piops)
+            vols.append(vol)
             block_device = None
             volumes.append(self.get_volume_struct(vol.id, availability_zone, per_volume_size, x, block_device, piops, None, tags))
+        available = False
+        print "Waiting on volumes to become available"
+        while not available:
+            available = True
+            for v in vols:
+                v.update()
+                if v.volume_state() == 'creating':
+                    available = False
+                elif v.volume_state() == 'error':
+                    raise VolumeNotAvailable("Error creating volume {}".format(v.id))
+
         # and available software raid device will be picked when the raid is assembled
         volume_group_id = self.store_volume_group(volumes, filesystem, raid_level, stripe_block_size, None, tags)
 
-        self.attach_volume_group(instance_id, volume_group_id)
 
+        self.attach_volume_group(instance_id, volume_group_id)
+        self.assemble_raid(instance_id, volume_group_id, True)
+        if mount_point:
+            self.mount_volume_group(instance_id, volume_group_id, mount_point, automount)
         return volume_group_id
 
 
