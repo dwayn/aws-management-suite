@@ -88,6 +88,7 @@ class StorageManager:
                     available = False
                 elif v.volume_state() == 'error':
                     raise VolumeNotAvailable("Error creating volume {}".format(v.id))
+            time.sleep(2)
 
         # and available software raid device will be picked when the raid is assembled
         volume_group_id = self.store_volume_group(volumes, filesystem, raid_level, stripe_block_size, None, tags)
@@ -291,6 +292,10 @@ class StorageManager:
         sh = SSHManager()
         sh.connect(hostname=host, port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
         #TODO mkdir -p of the mount directory
+        command = "mkdir -p {}".format(mount_point)
+        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
+        if int(exit_code) != 0:
+            raise VolumeMountError("Unable to create mount directory: {}".format(mount_point))
         command = 'mount {0} {1} -o {2}'.format(block_device, mount_point, mount_options)
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
