@@ -8,6 +8,7 @@ from sshmanager import SSHManager
 import types
 from errors import *
 import datetime
+import re
 
 
 class SnapshotSchedule:
@@ -310,7 +311,79 @@ class StorageManager:
         # add entry to fstab for automounting the volume
         if automount:
             sh.sudo(command="cp /etc/fstab /etc/fstab.prev", sudo_password=settings.SUDO_PASSWORD)
-            sh.sudo(command="cat /etc/fstab | grep -ve '{0}\s' > /etc/fstab.new && grep -e '{0}\s' /etc/mtab >> /etc/fstab.new && cp -f /etc/fstab.new /etc/fstab".format(block_device), sudo_password=settings.SUDO_PASSWORD)
+            sh.sudo(command="cat /etc/fstab | grep -ve '{0}\s' > /etc/fstab.new && cat /etc/mtab | sed -nr '/({1}\s.*)/p' >> /etc/fstab.new && cp -f /etc/fstab.new /etc/fstab".format(block_device, block_device.replace('/', '\\/')), sudo_password=settings.SUDO_PASSWORD)
+
+    # updates /etc/fstab and /etc/mdadm.conf (if needed) to allow volumes to automatically mount on instance reboot
+    # if mount_point is not given, then it will attempt to use a mount point that the volume group is mounted at
+    # if a volume group has been attached and is mounted manually on the host then this will try to determine the
+    # mount point, set that mount point in fstab, and save the mount point setting to the database
+    def configure_volume_automount(self, volume_group_id, mount_point=None):
+        mount_options = "noatime,nodiratime 0 0"
+        block_device_match_pattern = '^({})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
+        self.__db.execute("select "
+                          "hv.mount_point, "
+                          "host, "
+                          "vg.block_device, "
+                          "vg.group_type, "
+                          "vg.fs_type "
+                          "from hosts h "
+                          "join host_volumes hv on h.instance_id=hv.instance_id and hv.volume_group_id=%s "
+                          "join volume_groups vg on vg.volume_group_id=hv.volume_group_id", (volume_group_id, ))
+        info = self.__db.fetchone()
+        if not info:
+            raise VolumeMountError("instance_id, volume_group_id, or host_volume association not found")
+
+        defined_mount_point, host, block_device, group_type, fs_type = info
+        if not block_device:
+            raise VolumeMountError("block device is not set for volume group {}, check that the volume group is attached".format(volume_group_id))
+
+        sh = SSHManager()
+        sh.connect(hostname=host, port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
+
+        if not mount_point:
+            if defined_mount_point:
+                mount_point = defined_mount_point
+            else:
+                stdout, stderr, exit_code = sh.sudo('cat /etc/mtab')
+                mtab = stdout.split("\n")
+                for line in mtab:
+                    m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
+                    if m:
+                        mount_point = m.group(2)
+                        break
+
+        if not mount_point:
+            raise VolumeMountError("No mount point defined and none can be determined for volume group".format(volume_group_id))
+
+        new_fstab_line = "{} {} {} {}".format(block_device, mount_point, fs_type, mount_options)
+        stdout, stderr, exit_code = sh.sudo('cat /etc/fstab')
+        fstab = stdout.split("\n")
+        found = False
+        for i in range(0, len(fstab)):
+            line = fstab[i]
+            m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
+            if m:
+                fstab[i] = new_fstab_line
+                found = True
+                break
+        if not found:
+            fstab.append(new_fstab_line)
+
+        stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
+        sh.sudo("echo '{}' >> /etc/fstab".format("\n".join(fstab)))
+        sh.sudo("chmod 0644 /etc/fstab")
+
+        self.__db.execute("update host_volumes set mount_point=%s where volume_group_id=%s", (mount_point, volume_group_id))
+        self.__dbconn.commit()
+
+        # at this point /etc/fstab is fully configured
+        if group_type == 'raid':
+            stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf")
+            print stdout
+
+
+
+
 
 
     # pre_command and post_command can be a string containing a command to run using sudo on host, or they can be a callable function

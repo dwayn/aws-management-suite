@@ -3,7 +3,8 @@ CREATE TABLE `host_volumes` (
   `volume_group_id` int(11) NOT NULL,
   `mount_point` varchar(50) DEFAULT NULL,
   `notes` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`instance_id`,`volume_group_id`)
+  PRIMARY KEY (`instance_id`,`volume_group_id`),
+  UNIQUE KEY `volume_group_id` (`volume_group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `hosts` (
