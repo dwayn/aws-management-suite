@@ -2,8 +2,14 @@
 import argparse
 import MySQLdb
 import settings
+import inspect
+import os
 from storagemanager import StorageManager
 from storagemanager import SnapshotSchedule
+# DO NOT CHANGE THIS VARIABLE
+DATABASE_VERSION = 2
+#############################
+
 
 dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
                      port=settings.TRACKING_DB['port'],
@@ -279,6 +285,42 @@ def snapshot_schedule_delete(args):
 def snapshot_schedule_run(args):
     sm.run_snapshot_schedule(args.schedule_id)
 
+
+def install_db(args):
+    f = inspect.getframeinfo(inspect.currentframe()).filename
+    filename = os.path.dirname(os.path.abspath(f)) + '/schema/schema.sql'
+    sqlfile = open(filename, "r")
+    sql = sqlfile.read()
+    db.execute(sql)
+    dbconn.commit()
+
+
+def upgrade_db(args):
+    f = inspect.getframeinfo(inspect.currentframe()).filename
+    pathstub = os.path.dirname(os.path.abspath(f)) + '/schema/versions/'
+    filename_stub = 'db-version-'
+    extension = '.sql'
+
+    db.execute("select value from config where var='DATABASE_VERSION'")
+    v = db.fetchone()
+    if not v:
+        print "Current DATABASE_VERSION not found, database may need to be installed first"
+        return
+    version = int(v[0])
+    if version == DATABASE_VERSION:
+        print "Database is up to date"
+        return
+    for i in range(version+1, DATABASE_VERSION+1):
+        print "Applying version {}".format(i)
+        filename = pathstub + filename_stub + str(i) + extension
+        sqlfile = open(filename, "r")
+        sql = sqlfile.read()
+        db.execute(sql)
+        db.execute("insert into config set var=%s, value=%s on duplicate key update value=%s", ('DATABASE_VERSION', str(i), str(i)))
+        dbconn.commit()
+
+
+
 def main():
     global human_output
     parser = argparse.ArgumentParser(prog="ams")
@@ -421,6 +463,17 @@ def main():
     sschedulerunparser.set_defaults(func=snapshot_schedule_run)
 
     
+
+
+    iparser = subparsers.add_parser("internals", help="AMS internal managament")
+    isubparser = iparser.add_subparsers(title="type", dest='type')
+    dbparser = isubparser.add_parser("database", help="Manage the AMS metadata database")
+    dbsubparser = dbparser.add_subparsers(title="action", dest='action')
+    p = dbsubparser.add_parser("install", help="Create all the tables for an initial installation")
+    p.set_defaults(func=install_db)
+    p = dbsubparser.add_parser("upgrade", help="Upgrade the database to the current version for AMS")
+    p.set_defaults(func=upgrade_db)
+
 
     args = parser.parse_args()
 
