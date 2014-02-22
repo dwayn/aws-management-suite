@@ -1,14 +1,14 @@
 __author__ = 'dwayn'
-import MySQLdb
-import settings
-import os
-import boto.ec2
 import time
-from sshmanager import SSHManager
 import types
-from errors import *
 import datetime
 import re
+
+import MySQLdb
+import boto.ec2
+
+from sshmanager import SSHManager
+from errors import *
 
 
 class SnapshotSchedule:
@@ -33,12 +33,13 @@ class SnapshotSchedule:
 
 
 class StorageManager:
-    def __init__(self):
-        self.__dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
-                             port=settings.TRACKING_DB['port'],
-                             user=settings.TRACKING_DB['user'],
-                             passwd=settings.TRACKING_DB['pass'],
-                             db=settings.TRACKING_DB['dbname'])
+    def __init__(self, settings):
+        self.settings = settings
+        self.__dbconn = MySQLdb.connect(host=self.settings.TRACKING_DB['host'],
+                             port=self.settings.TRACKING_DB['port'],
+                             user=self.settings.TRACKING_DB['user'],
+                             passwd=self.settings.TRACKING_DB['pass'],
+                             db=self.settings.TRACKING_DB['dbname'])
         self.__db = self.__dbconn.cursor()
 
         self.__boto_conns = {}
@@ -46,7 +47,7 @@ class StorageManager:
 
     def __get_boto_conn(self, region):
         if region not in self.__boto_conns:
-            self.__boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=settings.AWS_ACCESS_KEY, aws_secret_access_key=settings.AWS_SECRET_KEY)
+            self.__boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
         return self.__boto_conns[region]
 
 
@@ -216,9 +217,9 @@ class StorageManager:
             return
 
         sh = SSHManager()
-        sh.connect(hostname=host, port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
+        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
-        stdout, stderr, exit_code = sh.sudo('ls --color=never /dev/md[0-9]*', sudo_password=settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo('ls --color=never /dev/md[0-9]*', sudo_password=self.settings.SUDO_PASSWORD)
         d = stdout.split(' ')
         current_devices = []
         for i in d:
@@ -242,18 +243,18 @@ class StorageManager:
             raid_level = voldata[0][0]
             stripe_block_size = voldata[0][1]
             command = 'mdadm --create {0} --level={1} --chunk={2} --raid-devices={3} {4}'.format(block_device, raid_level, stripe_block_size, devcount, devlist)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:
                 raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
             command = 'mkfs.{0} {1}'.format(fs_type, block_device)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:
                 raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
 
         else:
             command = 'mdadm --assemble {0} {1}'.format(block_device, devlist)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:
                 raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
@@ -291,14 +292,14 @@ class StorageManager:
         region = availability_zone[0:len(availability_zone) - 1]
 
         sh = SSHManager()
-        sh.connect(hostname=host, port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
+        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
         #TODO mkdir -p of the mount directory
         command = "mkdir -p {}".format(mount_point)
-        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
             raise VolumeMountError("Unable to create mount directory: {}".format(mount_point))
         command = 'mount {0} {1} -o {2}'.format(block_device, mount_point, mount_options)
-        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
             raise VolumeMountError("Error mounting volume with command: {0}\n{1}".format(command, stderr))
 
@@ -337,7 +338,7 @@ class StorageManager:
             raise VolumeMountError("block device is not set for volume group {}, check that the volume group is attached".format(volume_group_id))
 
         sh = SSHManager()
-        sh.connect(hostname=host, port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
+        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
         if not mount_point:
             if defined_mount_point:
@@ -472,8 +473,8 @@ class StorageManager:
                 pre_command(hostname=vgdata[10], instance_id=vgdata[7])
             elif isinstance(pre_command, types.StringType):
                 sh = SSHManager()
-                sh.connect(hostname=vgdata[10], port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
-                stdout, stderr, exit_code = sh.sudo(pre_command, sudo_password=settings.SUDO_PASSWORD)
+                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                stdout, stderr, exit_code = sh.sudo(pre_command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot pre_command\n{0}\n{1}".format(pre_command, stderr))
 
@@ -503,8 +504,8 @@ class StorageManager:
                 post_command(hostname=vgdata[10], instance_id=vgdata[7])
             elif isinstance(post_command, types.StringType):
                 sh = SSHManager()
-                sh.connect(hostname=vgdata[10], port=settings.SSH_PORT, username=settings.SSH_USER, password=settings.SSH_PASSWORD, key_filename=settings.SSH_KEYFILE)
-                stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=settings.SUDO_PASSWORD)
+                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr))
 
