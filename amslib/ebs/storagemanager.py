@@ -7,7 +7,7 @@ import re
 import MySQLdb
 import boto.ec2
 
-from sshmanager import SSHManager
+from amslib.ssh.sshmanager import SSHManager
 from errors import *
 
 

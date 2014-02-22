@@ -4,8 +4,8 @@ import MySQLdb
 import settings
 import inspect
 import os
-from ebs.storagemanager import StorageManager
-from ebs.storagemanager import SnapshotSchedule
+from amslib.ebs.storagemanager import StorageManager
+from amslib.ebs.storagemanager import SnapshotSchedule
 # DO NOT CHANGE THIS VARIABLE
 DATABASE_VERSION = 2
 #############################
