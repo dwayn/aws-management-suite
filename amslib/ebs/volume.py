@@ -424,3 +424,119 @@ class VolumeManager(BaseManager):
 
 
 
+    def argument_parser_builder(self, parser):
+
+        vsubparser = parser.add_subparsers(title="action", dest='action')
+
+        vlistparser = vsubparser.add_parser("list")
+        vlistparser.add_argument('search_field', nargs="?", help="field to search", choices=['host', 'instance_id'])
+        vlistparser.add_argument("--like", help="search string to use when listing resources")
+        vlistparser.add_argument("--prefix", help="search string prefix to use when listing resources")
+        vlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
+        vlistparser.set_defaults(func=self.command_volume_list)
+
+        vcreateparser = vsubparser.add_parser("create", help="Create new volume group.")
+        vcreategroup = vcreateparser.add_mutually_exclusive_group(required=True)
+        vcreategroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
+        vcreategroup.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
+        vcreateparser.add_argument('-n', '--numvols', type=int, help="Number of EBS volumes to create for the new volume group", required=True)
+        vcreateparser.add_argument('-r', '--raid-level', type=int, help="Set the raid level for new EBS raid", default=0, choices=[0,1,5,10])
+        vcreateparser.add_argument('-b', '--stripe-block-size', type=int, help="Set the stripe block/chunk size for new EBS raid", default=256)
+        vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
+        vcreateparser.add_argument('-a', '--no-automount', help="Configure the OS to automatically mount the volume group on reboot", action='store_true')
+        #TODO should filesystem be a limited list?
+        vcreateparser.add_argument('-f', '--filesystem', help="Filesystem to partition new raid/volume", default="xfs")
+        vcreateparser.add_argument('-s', '--size', type=int, help="Per EBS volume size in GiBs", required=True)
+        vcreateparser.add_argument('-p', '--iops', type=int, help="Per EBS volume provisioned iops")
+        vcreateparser.set_defaults(func=self.command_volume_create)
+
+        vcreateparser = vsubparser.add_parser("attach", help="Attach, assemble (if necessary) and mount(optional) a volume group")
+        vcreategroup = vcreateparser.add_mutually_exclusive_group(required=True)
+        vcreateparser.add_argument('volume_group_id', type=int, help="ID of the volume group to attach to instance")
+        vcreategroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
+        vcreategroup.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
+        vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
+        vcreateparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
+        vcreateparser.set_defaults(func=self.command_volume_attach)
+
+        vmountparser = vsubparser.add_parser("mount", help="Mount a volume group and configure auto mounting with /etc/fstab (and /etc/mdadm.conf if needed)")
+        vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to mount")
+        vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
+        vmountparser.add_argument('-a', '--no-automount', help="Disable configure the OS to automatically mount the volume group on reboot", action='store_true')
+        vmountparser.set_defaults(func=self.command_volume_mount)
+
+        vmountparser = vsubparser.add_parser("automount", help="Configure auto mounting of volume group with /etc/fstab (and /etc/mdadm.conf if needed)")
+        vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to configure automount for")
+        vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
+        vmountparser.set_defaults(func=self.command_volume_automount)
+
+        return parser
+
+
+    def command_volume_list(self, args):
+        whereclauses = []
+        if args.search_field:
+            if args.search_field in ('host', 'instance_id'):
+                args.search_field = "h." + args.search_field
+            if args.like:
+                whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.like))
+            elif args.prefix:
+                whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.prefix))
+        if args.zone:
+            whereclauses.append("h.availability_zone like '{0}%'".format(args.zone))
+
+        sql = "select " \
+                "host, " \
+                "h.instance_id, " \
+                "h.availability_zone, " \
+                "vg.volume_group_id, " \
+                "count(*) as volumes_in_group, " \
+                "raid_level, " \
+                "sum(size) as GiB, " \
+                "piops " \
+                "from " \
+                "hosts h " \
+                "left join host_volumes hv on h.instance_id=hv.instance_id " \
+                "left join volume_groups vg on vg.volume_group_id=hv.volume_group_id " \
+                "left join volumes v on v.volume_group_id=vg.volume_group_id"
+
+        if len(whereclauses):
+            sql += " where " + " and ".join(whereclauses)
+        sql += " group by vg.volume_group_id"
+        self.__db.execute(sql)
+        results = self.__db.fetchall()
+
+        if self.settings.human_output:
+            print "Volumes found:\n"
+            print "Hostname\tinstance_id\tavailability_zone\tvolume_group_id\tvolumes_in_group\traid_level\tGiB\tiops"
+            print "--------------------------------------------------------------"
+        for res in results:
+            print "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7])
+        if self.settings.human_output:
+            print "--------------------------------------------------------------"
+
+
+    def command_volume_create(self, args):
+        automount = True
+        if args.no_automount:
+            automount = False
+        if args.instance:
+            instance_id = args.instance
+        elif args.host:
+            self.__db.execute("select instance_id from hosts where host=%s", (args.host, ))
+            row = self.__db.fetchone()
+            if not row:
+                print "Host {} not found".format(args.host)
+                return
+            instance_id = row[0]
+
+        self.create_volume_group(instance_id, args.numvols, args.size, args.filesystem, args.raid_level, args.stripe_block_size, args.iops, None, args.mount_point, automount)
+
+    def command_volume_attach(self, args):
+        print "volume attach function"
+
+    def command_volume_automount(self, args):
+        self.configure_volume_automount(args.volume_group_id, args.mount_point)
+
+    def command_volume_mount(self, args):
+        print "volume mount function"

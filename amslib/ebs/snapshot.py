@@ -3,6 +3,7 @@ import time
 import types
 import datetime
 import re
+import argparse
 
 import boto.ec2
 from amslib.core.manager import BaseManager
@@ -327,4 +328,251 @@ class SnapshotManager(BaseManager):
         }
 
         return struct
+
+    def argument_parser_builder(self, parser):
+        ssubparser = parser.add_subparsers(title="action", dest='action')
+
+        screateparser = ssubparser.add_parser("create", help="Create a snapshot group of a volume group")
+        screatesubparser = screateparser.add_subparsers(title="resource", dest='resource')
+        screatevolparser = screatesubparser.add_parser("volume", help="create a snapshot of a given volume_group_id")
+        screatevolparser.add_argument('volume_group_id', type=int, help="ID of the volume group to snapshot")
+        screatevolparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
+        screatevolparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
+        screatevolparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
+        screatevolparser.set_defaults(func=self.command_snapshot_create_volume)
+        screatehostparser = screatesubparser.add_parser("host", help="create a snapshot of a specific volume group on a host")
+        group = screatehostparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('-i', '--instance', help="instance_id of an instance to snapshot a volume group")
+        group.add_argument('-H', '--host', help="hostname of an instance to snapshot a volume group")
+        group = screatehostparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('-m', '--mount-point', help="mount point of the volume group to snapshot")
+        screatehostparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
+        screatehostparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
+        screatehostparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
+        screatehostparser.set_defaults(func=self.command_snapshot_create_host)
+
+        sscheduleparser = ssubparser.add_parser("schedule", help="View, add or edit snapshot schedules")
+        sschedulesubparser = sscheduleparser.add_subparsers(title="subaction", dest='subaction')
+
+        sschedulelistparser = sschedulesubparser.add_parser("list", help="List snapshot schedules")
+        sschedulelistparser.add_argument('resource', nargs='?', help="host, instance, or volume", choices=['host', 'volume', 'instance'])
+        sschedulelistparser.add_argument('resource_id', nargs='?', help="hostname, instance_id or volume_group_id")
+        sschedulelistparser.add_argument("--like", help="search string to use when listing resources")
+        sschedulelistparser.add_argument("--prefix", help="search string prefix to use when listing resources")
+        sschedulelistparser.set_defaults(func=self.command_snapshot_schedule_list)
+
+
+        scheduleaddshared = argparse.ArgumentParser(add_help=False)
+        scheduleaddshared.add_argument('-i', '--intervals', type=int, nargs=4, help='Set all intervals at once', metavar=('HOUR', 'DAY', 'WEEK', 'MONTH'))
+        scheduleaddshared.add_argument('-r', '--retentions', type=int, nargs=5, help='Set all retentions at once', metavar=('HOURS', 'DAYS', 'WEEKS', 'MONTHS', 'YEARS'))
+        scheduleaddshared.add_argument('--int_hour', dest="interval_hour", type=int, help="hourly interval for snapshots", metavar="HOURS")
+        scheduleaddshared.add_argument('--int_day', dest="interval_day", type=int, help="daily interval for snapshots", metavar="DAYS")
+        scheduleaddshared.add_argument('--int_week', dest="interval_week", type=int, help="weekly interval for snapshots", metavar="WEEKS")
+        scheduleaddshared.add_argument('--int_month', dest="interval_month", type=int, help="monthly interval for snapshots", metavar="MONTHS")
+        scheduleaddshared.add_argument('--ret_hour', dest="retain_hourly", type=int, help="number of hourly snapshots to keep", metavar="HOURS")
+        scheduleaddshared.add_argument('--ret_day', dest="retain_daily", type=int, help="number of daily snapshots to keep", metavar="DAYS")
+        scheduleaddshared.add_argument('--ret_week', dest="retain_weekly", type=int, help="number of weekly snapshots to keep", metavar="WEEKS")
+        scheduleaddshared.add_argument('--ret_month', dest="retain_monthly", type=int, help="number of monthly snapshots to keep", metavar="MONTHS")
+        scheduleaddshared.add_argument('--ret_year', dest="retain_yearly", type=int, help="number of yearly snapshots to keep", metavar="YEARS")
+        scheduleaddshared.add_argument("--pre", dest="pre_command", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
+        scheduleaddshared.add_argument("--post", dest="post_command", help="command to run on host after snapshot (will not be run if volume group is not attached)")
+        scheduleaddshared.add_argument('-d', "--description", help="description to add to snapshot")
+
+        sscheduleaddparser = sschedulesubparser.add_parser("add", help="Create a new snapshot schedule")
+        sscheduleaddparser.set_defaults(func=self.command_snapshot_schedule_add)
+        sscheduleaddsubparser = sscheduleaddparser.add_subparsers(title="resource", dest="resource")
+        sscheduleaddhostparser = sscheduleaddsubparser.add_parser("host", help="add a snapshot to the schedule for a specific hostname (recommended)", parents=[scheduleaddshared])
+        sscheduleaddhostparser.add_argument("hostname", help="hostname to schedule snapshots for")
+        group = sscheduleaddhostparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('-m', '--mount-point', help="mount point of the volume group to snapshot")
+        sscheduleaddinstparser = sscheduleaddsubparser.add_parser("instance", help="add a snapshot to the schedule for a specific instance_id", parents=[scheduleaddshared])
+        sscheduleaddinstparser.add_argument("instance_id", help="instance_id to schedule snapshots for")
+        group = sscheduleaddinstparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('-m', '--mount-point', help="mount point of the volume group to snapshot")
+        sscheduleaddinstparser = sscheduleaddsubparser.add_parser("volume", help="add a snapshot to the schedule for a specific volume_group_id", parents=[scheduleaddshared])
+        sscheduleaddinstparser.add_argument("volume_group_id", help="volume_group_id to schedule snapshots for")
+
+        sscheduleeditparser = sschedulesubparser.add_parser("edit", help="Edit a snapshot schedule. hostname, instance_id, volume_group_id, and mount_point cannot be edited", parents=[scheduleaddshared])
+        sscheduleeditparser.add_argument('schedule_id', type=int, help="Snapshot schedule_id to edit (use 'ams snapshot schedule list' to list available schedules)")
+        sscheduleeditparser.set_defaults(func=self.command_snapshot_schedule_edit)
+
+        sscheduledelparser = sschedulesubparser.add_parser("delete", help="Delete a snapshot schedule", parents=[scheduleaddshared])
+        sscheduledelparser.add_argument('schedule_id', type=int, help="Snapshot schedule_id to delete (use 'ams snapshot schedule list' to list available schedules)")
+        sscheduledelparser.set_defaults(func=self.command_snapshot_schedule_delete)
+
+        sschedulerunparser = sschedulesubparser.add_parser("run", help="Run the scheduled snapshots now")
+        sschedulerunparser.add_argument('schedule_id', nargs='?', type=int, help="Snapshot schedule_id to run. If not supplied, then whatever is scheduled for the current time will run")
+        sschedulerunparser.set_defaults(func=self.command_snapshot_schedule_run)
+
+
+
+
+    def command_snapshot_create_volume(self, args):
+        self.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
+
+
+    def command_snapshot_create_host(self, args):
+        whereclauses = []
+        if args.instance:
+            whereclauses.append("h.instance_id = '{}'".format(args.instance))
+        elif args.host:
+            whereclauses.append("h.host = '{}'".format(args.host))
+
+        if args.mount_point:
+            whereclauses.append("hv.mount_point = '{}'".format(args.mount_point))
+
+        sql = "select " \
+              "hv.volume_group_id " \
+              "from " \
+              "hosts h " \
+              "left join host_volumes hv on h.instance_id=hv.instance_id "
+        sql += " where " + " and ".join(whereclauses)
+        self.__db.execute(sql)
+        res = self.__db.fetchone()
+        if res:
+            self.snapshot_volume_group(res[0], args.description, args.pre, args.post)
+        else:
+            print "Volume group not found"
+            exit(1)
+
+    def command_snapshot_schedule_list(self, args):
+        whereclauses = []
+        order_by = ''
+        if args.resource == 'host':
+            if args.resource_id:
+                whereclauses.append("hostname = '{}'".format(args.resource_id))
+            elif args.prefix:
+                whereclauses.append("hostname like '{}%'".format(args.prefix))
+            elif args.like:
+                whereclauses.append("hostname like '%{}%'".format(args.like))
+            order_by = " order by hostname asc"
+        elif args.resource == 'instance':
+            if args.resource_id:
+                whereclauses.append("instance_id = '{}'".format(args.resource_id))
+            elif args.prefix:
+                whereclauses.append("instance_id like '{}%'".format(args.prefix))
+            elif args.like:
+                whereclauses.append("instance_id like '%{}%'".format(args.like))
+            order_by = " order by instance_id asc"
+        elif args.resource == 'volume':
+            if args.resource_id:
+                whereclauses.append("volume_group_id = {}".format(args.resource_id))
+
+        sql = "select " \
+              "schedule_id," \
+              "hostname," \
+              "instance_id," \
+              "mount_point," \
+              "volume_group_id," \
+              "concat(interval_hour,'-',interval_day,'-',interval_week,'-',interval_month)," \
+              "concat(retain_hourly,'-',retain_daily,'-',retain_weekly,'-',retain_monthly,'-',retain_yearly)," \
+              "pre_command," \
+              "post_command," \
+              "description " \
+              "from snapshot_schedules "
+        if whereclauses:
+            sql += " and ".join(whereclauses)
+        sql += order_by
+        self.__db.execute(sql)
+        results = self.__db.fetchall()
+        if self.settings.human_output:
+            print "Snapshot Schedules:"
+            print "schedule_id\thostname\tinstance_id\tmount_point\tvolume_group_id\tintervals(h-d-w-m)\tretentions(h-d-w-m-y)\tpre_command\tpost_command\tdescription"
+            print "---------------------------------------------------------------------------------------------------------------------------------------------------"
+        for res in results:
+            print "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9])
+        if self.settings.human_output:
+            print "---------------------------------------------------------------------------------------------------------------------------------------------------"
+
+
+    def command_snapshot_schedule_add(self, args):
+        schedule = SnapshotSchedule()
+        processargs = [
+            'interval_hour',
+            'interval_day',
+            'interval_week',
+            'interval_month',
+            'retain_hourly',
+            'retain_daily',
+            'retain_weekly',
+            'retain_monthly',
+            'retain_yearly',
+            'description',
+            'pre_command',
+            'post_command',
+        ]
+
+        if args.resource == 'host':
+            schedule.hostname = args.host
+        if args.resource == 'instance':
+            schedule.instance_id = args.instance_id
+        if args.resource in ('host', 'instance'):
+            schedule.mount_point = args.mount_point
+        if args.resource == 'volume':
+            schedule.volume_group_id = args.volume_group_id
+
+        for arg in processargs:
+            if getattr(args, arg):
+                setattr(schedule, arg, getattr(args, arg))
+
+        if args.intervals:
+            schedule.interval_hour = args.intervals[0]
+            schedule.interval_day = args.intervals[1]
+            schedule.interval_week = args.intervals[2]
+            schedule.interval_month = args.intervals[3]
+        if args.retentions:
+            schedule.retain_hourly = args.retentions[0]
+            schedule.retain_daily = args.retentions[1]
+            schedule.retain_weekly = args.retentions[2]
+            schedule.retain_monthly = args.retentions[3]
+            schedule.retain_yearly = args.retentions[4]
+
+        self.schedule_snapshot(schedule)
+
+    def command_snapshot_schedule_edit(self, args):
+        processargs = [
+            'interval_hour',
+            'interval_day',
+            'interval_week',
+            'interval_month',
+            'retain_hourly',
+            'retain_daily',
+            'retain_weekly',
+            'retain_monthly',
+            'retain_yearly',
+            'description',
+            'pre_command',
+            'post_command',
+        ]
+        updates = {}
+
+        for arg in processargs:
+            if getattr(args, arg) is not None:
+                updates[arg] = getattr(args, arg)
+
+        if args.intervals:
+            updates['interval_hour'] = args.intervals[0]
+            updates['interval_day'] = args.intervals[1]
+            updates['interval_week'] = args.intervals[2]
+            updates['interval_month'] = args.intervals[3]
+        if args.retentions:
+            updates['retain_hourly'] = args.retentions[0]
+            updates['retain_daily'] = args.retentions[1]
+            updates['retain_weekly'] = args.retentions[2]
+            updates['retain_monthly'] = args.retentions[3]
+            updates['retain_yearly'] = args.retentions[4]
+
+        if not len(updates):
+            print "Must provide something to update on a snapshot schedule"
+            return
+
+        self.edit_snapshot_schedule(args.schedule_id, updates)
+
+
+    def command_snapshot_schedule_delete(self, args):
+        self.delete_snapshot_schedule(args.schedule_id)
+
+
+    def command_snapshot_schedule_run(self, args):
+        self.run_snapshot_schedule(args.schedule_id)
 
