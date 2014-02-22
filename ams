@@ -4,8 +4,9 @@ import MySQLdb
 import settings
 import inspect
 import os
-from amslib.ebs.storagemanager import StorageManager
-from amslib.ebs.storagemanager import SnapshotSchedule
+from amslib.ebs.volume import VolumeManager
+from amslib.ebs.snapshot import SnapshotManager
+from amslib.ebs.snapshot import SnapshotSchedule
 # DO NOT CHANGE THIS VARIABLE
 DATABASE_VERSION = 2
 #############################
@@ -19,7 +20,8 @@ dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
 db = dbconn.cursor()
 
 human_output = True
-sm = StorageManager(settings)
+vm = VolumeManager(settings)
+snapmanager = SnapshotManager(settings)
 
 
 
@@ -106,19 +108,19 @@ def volume_create(args):
             return
         instance_id = row[0]
 
-    sm.create_volume_group(instance_id, args.numvols, args.size, args.filesystem, args.raid_level, args.stripe_block_size, args.iops, None, args.mount_point, automount)
+    vm.create_volume_group(instance_id, args.numvols, args.size, args.filesystem, args.raid_level, args.stripe_block_size, args.iops, None, args.mount_point, automount)
 
 def volume_attach(args):
     print "volume attach function"
 
 def volume_automount(args):
-    sm.configure_volume_automount(args.volume_group_id, args.mount_point)
+    vm.configure_volume_automount(args.volume_group_id, args.mount_point)
 
 def volume_mount(args):
     print "volume mount function"
 
 def snapshot_create_volume(args):
-    sm.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
+    vm.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
 
 
 def snapshot_create_host(args):
@@ -140,7 +142,7 @@ def snapshot_create_host(args):
     db.execute(sql)
     res = db.fetchone()
     if res:
-        sm.snapshot_volume_group(res[0], args.description, args.pre, args.post)
+        snapmanager.snapshot_volume_group(res[0], args.description, args.pre, args.post)
     else:
         print "Volume group not found"
         exit(1)
@@ -237,7 +239,7 @@ def snapshot_schedule_add(args):
         schedule.retain_monthly = args.retentions[3]
         schedule.retain_yearly = args.retentions[4]
 
-    sm.schedule_snapshot(schedule)
+    snapmanager.schedule_snapshot(schedule)
 
 def snapshot_schedule_edit(args):
     processargs = [
@@ -276,15 +278,15 @@ def snapshot_schedule_edit(args):
         print "Must provide something to update on a snapshot schedule"
         return
 
-    sm.edit_snapshot_schedule(args.schedule_id, updates)
+    snapmanager.edit_snapshot_schedule(args.schedule_id, updates)
 
 
 def snapshot_schedule_delete(args):
-    sm.delete_snapshot_schedule(args.schedule_id)
+    snapmanager.delete_snapshot_schedule(args.schedule_id)
 
 
 def snapshot_schedule_run(args):
-    sm.run_snapshot_schedule(args.schedule_id)
+    snapmanager.run_snapshot_schedule(args.schedule_id)
 
 
 def install_db(args):
