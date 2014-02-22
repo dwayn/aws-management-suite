@@ -308,10 +308,9 @@ class StorageManager:
         print "Volume group {0} mounted on {1} ({2}) at {3}".format(volume_group_id, host, instance_id, mount_point)
 
         #TODO add the entries to to /etc/mdadm.conf so the raid device is initialized on boot
-        # add entry to fstab for automounting the volume
         if automount:
-            sh.sudo(command="cp /etc/fstab /etc/fstab.prev", sudo_password=settings.SUDO_PASSWORD)
-            sh.sudo(command="cat /etc/fstab | grep -ve '{0}\s' > /etc/fstab.new && cat /etc/mtab | sed -nr '/({1}\s.*)/p' >> /etc/fstab.new && cp -f /etc/fstab.new /etc/fstab".format(block_device, block_device.replace('/', '\\/')), sudo_password=settings.SUDO_PASSWORD)
+             self.configure_volume_automount(volume_group_id, mount_point)
+
 
     # updates /etc/fstab and /etc/mdadm.conf (if needed) to allow volumes to automatically mount on instance reboot
     # if mount_point is not given, then it will attempt to use a mount point that the volume group is mounted at
@@ -377,12 +376,43 @@ class StorageManager:
         self.__dbconn.commit()
 
         # at this point /etc/fstab is fully configured
+
+        # if problems on debian (or other OS's), there may be more steps needed to get mdadm to autostart
+        # http://superuser.com/questions/287462/how-can-i-make-mdadm-auto-assemble-raid-after-each-boot
+        #'^({})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
         if group_type == 'raid':
+            print "Reading /etc/mdadm.conf"
             stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf")
-            print stdout
+            conf = stdout.split("\n")
+            print "Reading current mdadm devices"
+            stdout, stderr, exit_code = sh.sudo("mdadm --detail --scan ")
+            scan = stdout.split("\n")
 
+            mdadm_line = None
+            for line in scan:
+                m = re.match('^ARRAY\s+([^\s]+)\s.*', line)
+                if m and m.group(1) == block_device:
+                    mdadm_line = m.group(0)
 
+            if not mdadm_line:
+                raise VolumeMountError("mdadm --detail --scan did not return an mdadm configuration for {}".format(block_device))
 
+            found = False
+            for i in range(0, len(conf)):
+                line = conf[i]
+                m = re.match('^ARRAY\s+([^\s]+)\s.*', line)
+                if m and m.group(1) == block_device:
+                    conf[i] = mdadm_line
+                    found = True
+                    break
+            if not found:
+                conf.append(mdadm_line)
+
+            print "Backing up /etc/mdadm.conf to /etc/mdadm.conf.prev"
+            sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev')
+            print "Writing new /etc/mdadm.conf file"
+            for line in conf:
+                sh.sudo("echo '{}' >> /etc/mdadm.conf".format(line))
 
 
 
