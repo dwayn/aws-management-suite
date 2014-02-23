@@ -30,5 +30,7 @@ class SnapshotCreateError(SnapshotError):
 class SnapshotScheduleError(SnapshotError):
     pass
 
+class SnapshotNotFound(SnapshotError):
+    pass
 
 

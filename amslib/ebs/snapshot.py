@@ -7,7 +7,7 @@ import argparse
 
 import boto.ec2
 from amslib.core.manager import BaseManager
-
+from volume import VolumeManager
 from amslib.ssh.sshmanager import SSHManager
 from errors import *
 
@@ -133,19 +133,86 @@ class SnapshotManager(BaseManager):
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr))
 
+    # copy an entire snapshot group to a region
+    def copy_snapshot_group(self, snapshot_group_id, region):
+
+        pass
 
 
     # clones a group of snapshots that represent a snapshot group and creates a new volume group
     # TODO find out if growing the volumes will cause issues with the software raid
     def clone_snapshot_group(self, snapshot_group_id, zone, piops=None):
-        # lookup the snapshot_group_id
-        # check the state of each snapshot; error if not all in good state
+        region = zone[0:len(zone) - 1]
+        botoconn = self.__get_boto_conn(region)
+        self.__db.execute("select "
+                          "snapshot_id, "
+                          "volume_id, "
+                          "size, "
+                          "piops, "
+                          "raid_device_id, "
+                          "region, "
+                          "sg.snapshot_group_id, "
+                          "volume_group_id, "
+                          "raid_level, "
+                          "stripe_block_size, "
+                          "fs_type, "
+                          "group_type, "
+                          "sg.block_device, "
+                          "s.block_device "
+                          "from snapshot_groups sg "
+                          "left join snapshots s on s.snapshot_group_id=sg.snapshot_group_id "
+                          "where sg.snapshot_group_id=%s", (snapshot_group_id, ))
+        snapshot_group = self.__db.fetchall()
+        if not snapshot_group:
+            raise SnapshotNotFound("Snapshot group {} not found".format(snapshot_group_id))
+
+        source_region = snapshot_group[0][5]
+        volume_group_id = snapshot_group[0][7]
+        raid_level = snapshot_group[0][8]
+        stripe_block_size = snapshot_group[0][9]
+        fs_type = snapshot_group[0][10]
+        group_type = snapshot_group[0][11]
+
+        # if the snapshot group is not in the same region as where the volume group is being created then it needs to be copied first
+        if region != source_region:
+
+            pass
+
+
+        snapshot_ids = []
+        for s in snapshot_group:
+            snapshot_ids.append(s[0])
+
+        snapshots = botoconn.get_all_snapshots(snapshot_ids)
+
+        # check for errors and wait if snapshots are still pending
+        #TODO need to decide if this should fail on pending snaps or wait...maybe an option to wait?
+        ready = False
+        while not ready:
+            ready = True
+            for s in snapshots:
+                if s.status == 'error':
+                    raise SnapshotError('Snapshot {} is in an error state, unable to clone snapshot group {}.'.format(s.id, snapshot_group_id))
+                if s.status == 'pending':
+                    ready = False
+
+            if ready:
+                break;
+            else:
+                for s in snapshots:
+                    s.update()
+                time.sleep(5)
+
+        vm = VolumeManager()
+        #vm.get_volume_struct()
+
         # clone each of the snapshots to volumes
-        # write the data for a new volume_group
-        # return the new volume_group_id
+        # make sure they do not error out before returning
+        # write the data for the new volume group to the database
+        # return new volume group id
 
 
-        pass
+
 
 
     def store_snapshot_group(self, snapshots, volume_group_id, filesystem, raid_level=0, stripe_block_size=256, block_device=None, tags=None, expiry_date=None):
