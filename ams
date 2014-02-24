@@ -81,9 +81,12 @@ def upgrade_db(args):
         print "Applying version {0}".format(i)
         filename = pathstub + filename_stub + str(i) + extension
         sqlfile = open(filename, "r")
-        sql = sqlfile.read()
-        db.execute(sql)
-        dbconn.commit()
+        sqlcontents = sqlfile.read()
+        statements = sqlcontents.split("\n\n--\n\n")
+        for sql in statements:
+            db.execute(sql)
+            dbconn.commit()
+
         db.execute("insert into config set var=%s, value=%s on duplicate key update value=%s", ('DATABASE_VERSION', str(i), str(i)))
         dbconn.commit()
 
