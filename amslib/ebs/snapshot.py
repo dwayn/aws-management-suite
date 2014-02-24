@@ -537,7 +537,7 @@ class SnapshotManager(BaseManager):
         group.add_argument("-H", "--host", help="hostname to attache the new volume group to")
         cloneargs.add_argument("-m", "--mount_point", help="directory to mount the new volume group to")
         cloneargs.add_argument("-a", "--no-automount", help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
-        cloneargs.add_argument("-p", "--piops", type=int, help="Per EBS volume provisioned iops. Set to 0 to explicitly disable provisioned iops. If not provided then the iops of the original volumes will be used.")
+        cloneargs.add_argument("-p", "--iops", type=int, help="Per EBS volume provisioned iops. Set to 0 to explicitly disable provisioned iops. If not provided then the iops of the original volumes will be used.")
         # ams snapshot clone
         scloneparser = ssubparser.add_parser("clone", help="Clone a snapshot group into a new volume group")
         sclonesubparser = scloneparser.add_subparsers(title='type', dest='type')
@@ -685,7 +685,7 @@ class SnapshotManager(BaseManager):
                     return
                 snapshot_group_id = r[0]
 
-        volume_group_id = self.clone_snapshot_group(snapshot_group_id, zone, args.piops, instance_id, mount_point, automount)
+        volume_group_id = self.clone_snapshot_group(snapshot_group_id, zone, args.iops, instance_id, mount_point, automount)
         print "Volume group {0} created".format(volume_group_id)
 
     def command_snapshot_create_volume(self, args):

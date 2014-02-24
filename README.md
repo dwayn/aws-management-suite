@@ -50,7 +50,7 @@ There are still a few legacy command structures that need to be cleaned up, so t
 
 
 ## Host/Instance
-### `ams host list`
+#### `ams host list`
 With no options this lists all host entries in the database
 
 Arguments:
@@ -218,6 +218,156 @@ Arguments:
 ----
 
 ## Snapshots
+#### `ams snapshot create volume volume_group_id`
+Create a snapshot of a specific volume_group_id.<br>
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before snapshotting and revert back to normal operation after snapshot has begun.
+
+Arguments:
+
+      --pre PRE             command to run on host to prepare for starting EBS
+                            snapshot (will not be run if volume group is not
+                            attached)
+      --post POST           command to run on host after snapshot (will not be run
+                            if volume group is not attached)
+      -d DESCRIPTION, --description DESCRIPTION
+                            description to add to snapshot(s)
+
+----
+
+#### `ams snapshot create host`
+Create a snapshot of a specific volume that is on a host<br>
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before snapshotting and revert back to normal operation after snapshot has begun.
+
+Required arguments: (host | instance), mount-point
+
+Arguments:
+
+  -i INSTANCE, --instance INSTANCE
+                        instance_id of an instance to snapshot a volume group
+  -H HOST, --host HOST  hostname of an instance to snapshot a volume group
+  -m MOUNT_POINT, --mount-point MOUNT_POINT
+                        mount point of the volume group to snapshot
+  --pre PRE             command to run on host to prepare for starting EBS
+                        snapshot (will not be run if volume group is not
+                        attached)
+  --post POST           command to run on host after snapshot (will not be run
+                        if volume group is not attached)
+  -d DESCRIPTION, --description DESCRIPTION
+                        description to add to snapshot(s)
+
+----
+
+#### `ams snapshot clone snapshot (snapshot_group_id)`
+Clone a specific snapshot_group_id into a new volume group and optionally attach and mount the new volume.<br>
+This will manage copying snapshot to destination region if the destination region is not the same as where the snapshot group is held.<br>
+
+If iops is provided then the volumes in the new volume group will be created with the provided iops, otherwise the iops of the original volume
+group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
+pass in 0 for iops to explicitly disable.
+
+Required arguments: (zone | host | instance)
+
+Arguments:
+
+      -z ZONE, --zone ZONE  Availability zone to create the new volume group in
+      -i INSTANCE, --instance INSTANCE
+                            instance id to attach the new volume group to
+      -H HOST, --host HOST  hostname to attache the new volume group to
+      -m MOUNT_POINT, --mount_point MOUNT_POINT
+                            directory to mount the new volume group to
+      -a, --no-automount    Disable configuring the OS to automatically mount the
+                            volume group on reboot
+      -p PIOPS, --iops PIOPS
+                            Per EBS volume provisioned iops. Set to 0 to
+                            explicitly disable provisioned iops. If not provided
+                            then the iops of the original volumes will be used.
+
+----
+
+#### `ams snapshot clone latest volume (volume_group_id)`
+Clone the latest snapshot for a volume_group_id and optionally attach and mount the new volume.<br>
+This will manage copying snapshot to destination region if the destination region is not the same as where the snapshot group is held.<br>
+
+If iops is provided then the volumes in the new volume group will be created with the provided iops, otherwise the iops of the original volume
+group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
+pass in 0 for iops to explicitly disable.
+
+Required arguments: (zone | host | instance)
+
+Arguments:
+
+      -z ZONE, --zone ZONE  Availability zone to create the new volume group in
+      -i INSTANCE, --instance INSTANCE
+                            instance id to attach the new volume group to
+      -H HOST, --host HOST  hostname to attache the new volume group to
+      -m MOUNT_POINT, --mount_point MOUNT_POINT
+                            directory to mount the new volume group to
+      -a, --no-automount    Disable configuring the OS to automatically mount the
+                            volume group on reboot
+      -p IOPS, --iops IOPS  Per EBS volume provisioned iops. Set to 0 to
+                            explicitly disable provisioned iops. If not provided
+                            then the iops of the original volumes will be used.
+
+
+----
+
+#### `ams snapshot clone latest host (hostname) (src_mount_point)`
+Clone the latest snapshot for a host + mount-point and optionally attach and mount the new volume.<br>
+This will manage copying snapshot to destination region if the destination region is not the same as where the snapshot group is held.<br>
+
+If iops is provided then the volumes in the new volume group will be created with the provided iops, otherwise the iops of the original volume
+group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
+pass in 0 for iops to explicitly disable.
+
+Required arguments: (zone | host | instance)
+
+Arguments:
+
+      -z ZONE, --zone ZONE  Availability zone to create the new volume group in
+      -i INSTANCE, --instance INSTANCE
+                            instance id to attach the new volume group to
+      -H HOST, --host HOST  hostname to attache the new volume group to
+      -m MOUNT_POINT, --mount_point MOUNT_POINT
+                            directory to mount the new volume group to
+      -a, --no-automount    Disable configuring the OS to automatically mount the
+                            volume group on reboot
+      -p IOPS, --iops IOPS  Per EBS volume provisioned iops. Set to 0 to
+                            explicitly disable provisioned iops. If not provided
+                            then the iops of the original volumes will be used.
+
+----
+
+#### `ams snapshot clone latest instance (instance_id) (src_mount_point)`
+Clone the latest snapshot for an instance + mount-point and optionally attach and mount the new volume.<br>
+This will manage copying snapshot to destination region if the destination region is not the same as where the snapshot group is held.<br>
+
+If iops is provided then the volumes in the new volume group will be created with the provided iops, otherwise the iops of the original volume
+group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
+pass in 0 for iops to explicitly disable.
+
+Required arguments: (zone | host | instance)
+
+Arguments:
+
+      -z ZONE, --zone ZONE  Availability zone to create the new volume group in
+      -i INSTANCE, --instance INSTANCE
+                            instance id to attach the new volume group to
+      -H HOST, --host HOST  hostname to attache the new volume group to
+      -m MOUNT_POINT, --mount_point MOUNT_POINT
+                            directory to mount the new volume group to
+      -a, --no-automount    Disable configuring the OS to automatically mount the
+                            volume group on reboot
+      -p IOPS, --iops IOPS  Per EBS volume provisioned iops. Set to 0 to
+                            explicitly disable provisioned iops. If not provided
+                            then the iops of the original volumes will be used.
+
+
+----
+
+#### `ams snapshot schedule`
+
+
+----
 
 ## Internals
 
