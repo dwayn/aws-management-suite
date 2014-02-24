@@ -196,8 +196,8 @@ Mount a volume group on the host that it is currently attached. Supports mountin
 
 ----
 
-#### `ams volume automount`
-Configure automounting for a volume group. If mount point is not provided then it will use the currently defined mount point for the volume.
+#### `ams volume automount (volume_group_id)`
+Configure automounting for the volume_group_id. If mount point is not provided then it will use the currently defined mount point for the volume.
 If neither of these exist then it will configure automounting of the volume where it is currently mounted, otherwise it will fail configuring automounting.
 
     optional arguments:
