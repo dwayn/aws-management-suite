@@ -3,6 +3,7 @@ import time
 import types
 import datetime
 import re
+import os
 
 import boto.ec2
 from amslib.core.manager import BaseManager
@@ -14,16 +15,16 @@ from errors import *
 class VolumeManager(BaseManager):
 
     def __get_boto_conn(self, region):
-        if region not in self.__boto_conns:
-            self.__boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
-        return self.__boto_conns[region]
+        if region not in self.boto_conns:
+            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
+        return self.boto_conns[region]
 
 
     # provisions ebs volumes, attaches them to a host and create the software raid on the instance
     def create_volume_group(self, instance_id, num_volumes, per_volume_size, filesystem='xfs', raid_level=0, stripe_block_size=256, piops=None, tags=None, mount_point=None, automount=True):
         #TODO add support to hosts to know if iops are/can be enabled
-        self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
-        data = self.__db.fetchone()
+        self.db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
+        data = self.db.fetchone()
         if not data:
             raise InstanceNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
 
@@ -74,13 +75,13 @@ class VolumeManager(BaseManager):
 
 
     def attach_volume_group(self, instance_id, volume_group_id):
-        self.__db.execute("select "
+        self.db.execute("select "
                           "v.volume_id, "
                           "v.availability_zone "
                           "from volume_groups vg join volumes v on vg.volume_group_id = v.volume_group_id "
                           "where vg.volume_group_id=%s "
                           "order by raid_device_id", (volume_group_id, ))
-        data = self.__db.fetchall()
+        data = self.db.fetchall()
 
         if not data:
             raise VolumeGroupNotFound("Metadata not found for volume_group_id: {0}".format(volume_group_id))
@@ -131,8 +132,8 @@ class VolumeManager(BaseManager):
 
             print "Attaching {0} as {1} to {2}".format(vol.id, block_device, instance_id)
             volumes[row[0]].attach(instance_id, block_device)
-            self.__db.execute("UPDATE volumes set block_device=%s where volume_id=%s", (block_device, row[0]))
-            self.__dbconn.commit()
+            self.db.execute("UPDATE volumes set block_device=%s where volume_id=%s", (block_device, row[0]))
+            self.dbconn.commit()
 
 
         print "Waiting for volumes to attach"
@@ -158,14 +159,14 @@ class VolumeManager(BaseManager):
 
     def assemble_raid(self, instance_id, volume_group_id, new_raid=False):
         #TODO check that the volumes are attached
-        self.__db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
-        data = self.__db.fetchone()
+        self.db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
+        data = self.db.fetchone()
         if not data:
             raise InstanceNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
         availability_zone, host = data
         region = availability_zone[0:len(availability_zone) - 1]
 
-        self.__db.execute("select "
+        self.db.execute("select "
                           "vg.raid_level, "
                           "vg.stripe_block_size, "
                           "vg.fs_type, "
@@ -175,7 +176,7 @@ class VolumeManager(BaseManager):
                           "v.raid_device_id "
                           "from volume_groups vg join volumes v on vg.volume_group_id = v.volume_group_id "
                           "where vg.volume_group_id=%s order by raid_device_id", (volume_group_id, ))
-        voldata = self.__db.fetchall()
+        voldata = self.db.fetchall()
 
         if not voldata:
             raise VolumeGroupNotFound("Metadata not found for volume_group_id: {0}".format(volume_group_id))
@@ -202,9 +203,13 @@ class VolumeManager(BaseManager):
 
         devcount = 0
         devlist = ''
+        md_dev_pattern = ''
         for row in voldata:
             devcount += 1
             devlist += row[5] + " "
+            # /dev/sd
+            md_dev_pattern = '([a-z]+{}).*?'.format(row[5][6:]) + md_dev_pattern
+        md_dev_pattern = '(md[0-9]+).*?' + md_dev_pattern
         fs_type = voldata[0][2]
 
         if new_raid:
@@ -221,16 +226,31 @@ class VolumeManager(BaseManager):
                 raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
 
         else:
-            command = 'mdadm --assemble {0} {1}'.format(block_device, devlist)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
-            if int(exit_code) != 0:
-                raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
+            # find out if the raid was auto assembled as a new md device before trying to assemble it
+            stdout, stderr, exit_code = sh.sudo('cat /proc/mdstat', sudo_password=self.settings.SUDO_PASSWORD)
+            mdstat = stdout.split('\n')
+
+            dev_found = None
+            for line in mdstat:
+                m = re.match(md_dev_pattern, line)
+                if m:
+                    dev_found = m.group(1)
+
+            if dev_found:
+                print "Waiting 10 seconds to allow raid device to get ready"
+                time.sleep(10)
+                block_device = '/dev/' + dev_found
+            else:
+                command = 'mdadm --assemble {0} {1}'.format(block_device, devlist)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                if int(exit_code) != 0:
+                    raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
         #TODO add check in here to cat /proc/mdstat and make sure the expected raid is setup
 
-        self.__db.execute("INSERT INTO host_volumes set instance_id=%s, volume_group_id=%s, mount_point=NULL ON DUPLICATE KEY UPDATE mount_point=NULL", (instance_id, volume_group_id))
-        self.__db.execute("UPDATE volume_groups set block_device=%s where volume_group_id=%s", (block_device, volume_group_id))
-        self.__dbconn.commit()
+        self.db.execute("INSERT INTO host_volumes set instance_id=%s, volume_group_id=%s, mount_point=NULL ON DUPLICATE KEY UPDATE mount_point=NULL", (instance_id, volume_group_id))
+        self.db.execute("UPDATE volume_groups set block_device=%s where volume_group_id=%s", (block_device, volume_group_id))
+        self.dbconn.commit()
 
 
 
@@ -241,7 +261,7 @@ class VolumeManager(BaseManager):
         #TODO check that volume group is attached and assembled
         mount_options = 'noatime,nodiratime,noauto'
 
-        self.__db.execute("select "
+        self.db.execute("select "
                           "hv.mount_point, "
                           "host, "
                           "h.availability_zone, "
@@ -252,7 +272,7 @@ class VolumeManager(BaseManager):
                           "join hosts h on h.instance_id=hv.instance_id "
                           "join volume_groups vg on vg.volume_group_id=hv.volume_group_id "
                           "where hv.instance_id=%s and hv.volume_group_id=%s", (instance_id, volume_group_id))
-        data = self.__db.fetchone()
+        data = self.db.fetchone()
         if not data:
             raise VolumeGroupNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
 
@@ -266,13 +286,13 @@ class VolumeManager(BaseManager):
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
             raise VolumeMountError("Unable to create mount directory: {}".format(mount_point))
-        command = 'mount {0} {1} -o {2}'.format(block_device, mount_point, mount_options)
+        command = 'mount {} {} -o {} -t {}'.format(block_device, mount_point, mount_options, fs_type)
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
             raise VolumeMountError("Error mounting volume with command: {0}\n{1}".format(command, stderr))
 
-        self.__db.execute("UPDATE host_volumes SET mount_point=%s WHERE instance_id=%s AND volume_group_id=%s", (mount_point, instance_id, volume_group_id))
-        self.__dbconn.commit()
+        self.db.execute("UPDATE host_volumes SET mount_point=%s WHERE instance_id=%s AND volume_group_id=%s", (mount_point, instance_id, volume_group_id))
+        self.dbconn.commit()
 
         print "Volume group {0} mounted on {1} ({2}) at {3}".format(volume_group_id, host, instance_id, mount_point)
 
@@ -288,7 +308,7 @@ class VolumeManager(BaseManager):
     def configure_volume_automount(self, volume_group_id, mount_point=None):
         mount_options = "noatime,nodiratime 0 0"
         block_device_match_pattern = '^({})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
-        self.__db.execute("select "
+        self.db.execute("select "
                           "hv.mount_point, "
                           "host, "
                           "vg.block_device, "
@@ -297,7 +317,7 @@ class VolumeManager(BaseManager):
                           "from hosts h "
                           "join host_volumes hv on h.instance_id=hv.instance_id and hv.volume_group_id=%s "
                           "join volume_groups vg on vg.volume_group_id=hv.volume_group_id", (volume_group_id, ))
-        info = self.__db.fetchone()
+        info = self.db.fetchone()
         if not info:
             raise VolumeMountError("instance_id, volume_group_id, or host_volume association not found")
 
@@ -312,7 +332,7 @@ class VolumeManager(BaseManager):
             if defined_mount_point:
                 mount_point = defined_mount_point
             else:
-                stdout, stderr, exit_code = sh.sudo('cat /etc/mtab')
+                stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.SUDO_PASSWORD)
                 mtab = stdout.split("\n")
                 for line in mtab:
                     m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
@@ -324,7 +344,7 @@ class VolumeManager(BaseManager):
             raise VolumeMountError("No mount point defined and none can be determined for volume group".format(volume_group_id))
 
         new_fstab_line = "{} {} {} {}".format(block_device, mount_point, fs_type, mount_options)
-        stdout, stderr, exit_code = sh.sudo('cat /etc/fstab')
+        stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
         fstab = stdout.split("\n")
         found = False
         for i in range(0, len(fstab)):
@@ -338,11 +358,11 @@ class VolumeManager(BaseManager):
             fstab.append(new_fstab_line)
 
         stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
-        sh.sudo("echo '{}' >> /etc/fstab".format("\n".join(fstab)))
-        sh.sudo("chmod 0644 /etc/fstab")
+        sh.sudo("echo '{}' >> /etc/fstab".format("\n".join(fstab)), sudo_password=self.settings.SUDO_PASSWORD)
+        sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
 
-        self.__db.execute("update host_volumes set mount_point=%s where volume_group_id=%s", (mount_point, volume_group_id))
-        self.__dbconn.commit()
+        self.db.execute("update host_volumes set mount_point=%s where volume_group_id=%s", (mount_point, volume_group_id))
+        self.dbconn.commit()
 
         # at this point /etc/fstab is fully configured
 
@@ -351,10 +371,10 @@ class VolumeManager(BaseManager):
         #'^({})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
         if group_type == 'raid':
             print "Reading /etc/mdadm.conf"
-            stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf")
+            stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf", sudo_password=self.settings.SUDO_PASSWORD)
             conf = stdout.split("\n")
             print "Reading current mdadm devices"
-            stdout, stderr, exit_code = sh.sudo("mdadm --detail --scan ")
+            stdout, stderr, exit_code = sh.sudo("mdadm --detail --scan ", sudo_password=self.settings.SUDO_PASSWORD)
             scan = stdout.split("\n")
 
             mdadm_line = None
@@ -362,6 +382,11 @@ class VolumeManager(BaseManager):
                 m = re.match('^ARRAY\s+([^\s]+)\s.*', line)
                 if m and m.group(1) == block_device:
                     mdadm_line = m.group(0)
+                else:
+                    stdout, stderr, exit_code = sh.sudo("ls -l --color=never {}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.SUDO_PASSWORD)
+                    if stdout.strip():
+                        if os.path.basename(stdout.strip()) == os.path.basename(block_device):
+                            mdadm_line = m.group(0).replace(m.group(1), block_device)
 
             if not mdadm_line:
                 raise VolumeMountError("mdadm --detail --scan did not return an mdadm configuration for {}".format(block_device))
@@ -378,32 +403,32 @@ class VolumeManager(BaseManager):
                 conf.append(mdadm_line)
 
             print "Backing up /etc/mdadm.conf to /etc/mdadm.conf.prev"
-            sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev')
+            sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev', sudo_password=self.settings.SUDO_PASSWORD)
             print "Writing new /etc/mdadm.conf file"
             for line in conf:
-                sh.sudo("echo '{}' >> /etc/mdadm.conf".format(line))
+                sh.sudo("echo '{}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
 
 
 
-    def store_volume_group(self, volumes, filesystem, raid_level=0, stripe_block_size=256, block_device=None, tags=None):
+    def store_volume_group(self, volumes, filesystem, raid_level=0, stripe_block_size=256, block_device=None, tags=None, snapshot_group_id=None):
         raid_type = 'raid'
         if len(volumes) == 1:
             raid_type = 'single'
-        self.__db.execute("INSERT INTO volume_groups(raid_level, stripe_block_size, fs_type, block_device, group_type, tags) "
-                          "VALUES(%s,%s,%s,%s,%s,%s)", (raid_level, stripe_block_size, filesystem, block_device, raid_type, tags))
-        self.__dbconn.commit()
-        volume_group_id = self.__db.lastrowid
+        self.db.execute("INSERT INTO volume_groups(raid_level, stripe_block_size, fs_type, block_device, group_type, tags, snapshot_group_id) "
+                          "VALUES(%s,%s,%s,%s,%s,%s,%s)", (raid_level, stripe_block_size, filesystem, block_device, raid_type, tags, snapshot_group_id))
+        self.dbconn.commit()
+        volume_group_id = self.db.lastrowid
 
         print volume_group_id
 
         for x in range(0, len(volumes)):
             volumes[x]['volume_group_id'] = volume_group_id
             print volumes[x]
-            self.__db.execute("INSERT INTO volumes(volume_id, volume_group_id, availability_zone, size, piops, block_device, raid_device_id, tags)"
+            self.db.execute("INSERT INTO volumes(volume_id, volume_group_id, availability_zone, size, piops, block_device, raid_device_id, tags)"
                               "VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (volumes[x]['volume_id'], volumes[x]['volume_group_id'], volumes[x]['availability_zone'],
                                                                   volumes[x]['size'],volumes[x]['piops'], volumes[x]['block_device'],
                                                                   volumes[x]['raid_device_id'], volumes[x]['tags']))
-            self.__dbconn.commit()
+            self.dbconn.commit()
 
 
         return volume_group_id
@@ -418,7 +443,7 @@ class VolumeManager(BaseManager):
             'piops': piops,
             'block_device': block_device,
             'raid_device_id': raid_device_id,
-            'tags': tags
+            'tags': tags,
         }
         return struct
 
@@ -443,7 +468,7 @@ class VolumeManager(BaseManager):
         vcreateparser.add_argument('-r', '--raid-level', type=int, help="Set the raid level for new EBS raid", default=0, choices=[0,1,5,10])
         vcreateparser.add_argument('-b', '--stripe-block-size', type=int, help="Set the stripe block/chunk size for new EBS raid", default=256)
         vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
-        vcreateparser.add_argument('-a', '--no-automount', help="Configure the OS to automatically mount the volume group on reboot", action='store_true')
+        vcreateparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
         #TODO should filesystem be a limited list?
         vcreateparser.add_argument('-f', '--filesystem', help="Filesystem to partition new raid/volume", default="xfs")
         vcreateparser.add_argument('-s', '--size', type=int, help="Per EBS volume size in GiBs", required=True)
@@ -503,8 +528,8 @@ class VolumeManager(BaseManager):
         if len(whereclauses):
             sql += " where " + " and ".join(whereclauses)
         sql += " group by vg.volume_group_id"
-        self.__db.execute(sql)
-        results = self.__db.fetchall()
+        self.db.execute(sql)
+        results = self.db.fetchall()
 
         if self.settings.human_output:
             print "Volumes found:\n"
@@ -523,8 +548,8 @@ class VolumeManager(BaseManager):
         if args.instance:
             instance_id = args.instance
         elif args.host:
-            self.__db.execute("select instance_id from hosts where host=%s", (args.host, ))
-            row = self.__db.fetchone()
+            self.db.execute("select instance_id from hosts where host=%s", (args.host, ))
+            row = self.db.fetchone()
             if not row:
                 print "Host {} not found".format(args.host)
                 return

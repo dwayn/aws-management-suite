@@ -36,9 +36,9 @@ class SnapshotSchedule:
 class SnapshotManager(BaseManager):
 
     def __get_boto_conn(self, region):
-        if region not in self.__boto_conns:
-            self.__boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
-        return self.__boto_conns[region]
+        if region not in self.boto_conns:
+            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
+        return self.boto_conns[region]
 
 
     # pre_command and post_command can be a string containing a command to run using sudo on host, or they can be a callable function
@@ -46,7 +46,7 @@ class SnapshotManager(BaseManager):
     # note that the pre/post commands will not be executed if the volume group is not attached to a host
     def snapshot_volume_group(self, volume_group_id, description=None, pre_command=None, post_command=None, expiry_date=None):
         # lookup volume_group and instance_id (if attached)
-        self.__db.execute("select "
+        self.db.execute("select "
                           "vg.volume_group_id, "
                           "vg.raid_level, "
                           "vg.stripe_block_size, "
@@ -64,15 +64,15 @@ class SnapshotManager(BaseManager):
                           "left join hosts h on h.instance_id = hv.instance_id "
                           "left join volumes v on v.volume_group_id=vg.volume_group_id "
                           "where vg.volume_group_id = %s", (volume_group_id, ))
-        vgdata = self.__db.fetchone()
+        vgdata = self.db.fetchone()
         if not vgdata:
             raise VolumeGroupNotFound("Volume group {0} not found".format(volume_group_id))
 
         region = vgdata[9][0:len(vgdata[9]) - 1]
         botoconn = self.__get_boto_conn(region)
 
-        self.__db.execute("select volume_id, size, piops, block_device, raid_device_id, tags from volumes where volume_group_id=%s", (volume_group_id, ))
-        voldata = self.__db.fetchall()
+        self.db.execute("select volume_id, size, piops, block_device, raid_device_id, tags from volumes where volume_group_id=%s", (volume_group_id, ))
+        voldata = self.db.fetchall()
         if not voldata:
             raise VolumeGroupNotFound("Error fetching volume information for volume group {0}".format(volume_group_id))
 
@@ -109,7 +109,7 @@ class SnapshotManager(BaseManager):
         for vol in voldata:
             snap = botoconn.create_snapshot(volume_id=vol[0], description=description)
             snaps[vol[0]] = snap
-            snapshotdata = self.get_snapshot_struct(snap.id, vol[1], vol[4], vol[0], region, vol[3], vol[2], None, vol[5])
+            snapshotdata = self.get_snapshot_struct(snap.id, vol[1], vol[4], vol[0], region, vol[3], vol[2], None, vol[5], description)
             snapshots.append(snapshotdata)
 
 
@@ -135,16 +135,76 @@ class SnapshotManager(BaseManager):
 
     # copy an entire snapshot group to a region
     def copy_snapshot_group(self, snapshot_group_id, region):
+        botoconn = self.__get_boto_conn(region)
+        self.db.execute("select "
+                          "s.snapshot_id, "
+                          "s.volume_id, "
+                          "s.size, "
+                          "s.piops, "
+                          "s.block_device, "
+                          "s.raid_device_id, "
+                          "s.created_date, "
+                          "s.expiry_date, "
+                          "s.region, "
+                          "s.tags, "
+                          "s.description, "
+                          "sg.volume_group_id, "
+                          "sg.raid_level, "
+                          "sg.stripe_block_size, "
+                          "sg.fs_type, "
+                          "sg.block_device, "
+                          "sg.group_type, "
+                          "sg.tags "
+                          "from snapshot_groups sg "
+                          "join snapshots s on s.snapshot_group_id=sg.snapshot_group_id "
+                          "where sg.snapshot_group_id=%s", (snapshot_group_id, ))
+        sginfo = self.db.fetchall()
+        volume_group_id, raid_level, stripe_block_size, fs_type, block_device, group_type, tags = sginfo[0][11:]
 
-        pass
+        snap_details = {}
+        snaps = {}
+        for s in sginfo:
+            snap_details[s[0]] = s[:11]
+            id = botoconn.copy_snapshot(s[8], s[0], "Copy of {} from {}".format(s[0], s[8]))
+            snaps[id] = s[0]
+
+        time.sleep(2)
+        new_snaps = botoconn.get_all_snapshots(snaps.values())
+        snapshots = []
+        for snap in new_snaps:
+            details = snap_details[snaps[snap.id]]
+            snapshotdata = self.get_snapshot_struct(snap.id, details[2], details[5], details[1], region, details[4], details[3], None, details[9], "Copy of {} from {}".format(details[0], details[8]))
+            snapshots.append(snapshotdata)
+
+        pending = True
+        while pending:
+            pending = False
+            for snap in new_snaps:
+                snap.update()
+                if snap.status == 'error':
+                    raise SnapshotCreateError("Error creating snapshot {} as a copy of snapshot {}".format(snap.id, snaps[snap.id]))
+                if snap.status == 'pending':
+                    pending = True
+
+            if not pending:
+                break
+            else:
+                time.sleep(5)
+
+        new_snapshot_group_id = self.store_snapshot_group(snapshots, volume_group_id, fs_type, raid_level, stripe_block_size, block_device, tags, None)
+
+        return new_snapshot_group_id
+
+
 
 
     # clones a group of snapshots that represent a snapshot group and creates a new volume group
     # TODO find out if growing the volumes will cause issues with the software raid
-    def clone_snapshot_group(self, snapshot_group_id, zone, piops=None):
-        region = zone[0:len(zone) - 1]
+    def clone_snapshot_group(self, snapshot_group_id, availability_zone, piops=None, instance_id=None, mount_point=None, automount=True):
+        original_snapshot_group_id = None
+        region = availability_zone[0:len(availability_zone) - 1]
         botoconn = self.__get_boto_conn(region)
-        self.__db.execute("select "
+        self.db.execute("select "
                           "snapshot_id, "
                           "volume_id, "
                           "size, "
@@ -158,11 +218,13 @@ class SnapshotManager(BaseManager):
                           "fs_type, "
                           "group_type, "
                           "sg.block_device, "
-                          "s.block_device "
+                          "s.block_device, "
+                          "s.tags,"
+                          "sg.tags "
                           "from snapshot_groups sg "
                           "left join snapshots s on s.snapshot_group_id=sg.snapshot_group_id "
                           "where sg.snapshot_group_id=%s", (snapshot_group_id, ))
-        snapshot_group = self.__db.fetchall()
+        snapshot_group = self.db.fetchall()
         if not snapshot_group:
             raise SnapshotNotFound("Snapshot group {} not found".format(snapshot_group_id))
 
@@ -173,15 +235,17 @@ class SnapshotManager(BaseManager):
         fs_type = snapshot_group[0][10]
         group_type = snapshot_group[0][11]
 
-        # if the snapshot group is not in the same region as where the volume group is being created then it needs to be copied first
+        # if the snapshot group is not in the same region as where the volume group is being created then it needs to be
+        # copied and the new snapshot_group_id used
         if region != source_region:
+            original_snapshot_group_id = snapshot_group_id
+            snapshot_group_id = self.copy_snapshot_group(original_snapshot_group_id, region)
 
-            pass
-
-
+        snapshot_details = {}
         snapshot_ids = []
         for s in snapshot_group:
             snapshot_ids.append(s[0])
+            snapshot_details[s[0]] = s
 
         snapshots = botoconn.get_all_snapshots(snapshot_ids)
 
@@ -197,20 +261,55 @@ class SnapshotManager(BaseManager):
                     ready = False
 
             if ready:
-                break;
+                break
             else:
                 for s in snapshots:
                     s.update()
                 time.sleep(5)
 
-        vm = VolumeManager()
-        #vm.get_volume_struct()
+        vm = VolumeManager(self.settings)
 
-        # clone each of the snapshots to volumes
-        # make sure they do not error out before returning
-        # write the data for the new volume group to the database
-        # return new volume group id
+        vols = []
+        volumes = []
+        #for x in range(0, num_volumes):
+        for s in snapshots:
+            vol_type = 'standard'
+            iops = None
+            if piops is not None:
+                if piops > 0:
+                    iops = piops
+            else:
+                iops = snapshot_details[s.id][3]
 
+            if iops:
+                vol_type = 'io1'
+
+            vol = s.create_volume(availability_zone, iops=iops, volume_type=vol_type)
+            vols.append(vol)
+
+            volumes.append(vm.get_volume_struct(vol.id, availability_zone, snapshot_details[s.id][2], snapshot_details[s.id][4], None, iops, None, snapshot_details[s.id][14]))
+        available = False
+        print "Waiting on volumes to become available"
+        while not available:
+            available = True
+            for v in vols:
+                v.update()
+                if v.volume_state() == 'creating':
+                    available = False
+                elif v.volume_state() == 'error':
+                    raise VolumeNotAvailable("Error creating volume {}".format(v.id))
+            time.sleep(2)
+
+        # and available software raid device will be picked when the raid is assembled
+        volume_group_id = vm.store_volume_group(volumes, fs_type, raid_level, stripe_block_size, None, snapshot_details[s.id][15], snapshot_group_id)
+
+        if instance_id:
+            vm.attach_volume_group(instance_id, volume_group_id)
+            vm.assemble_raid(instance_id, volume_group_id, False)
+            if mount_point:
+                vm.mount_volume_group(instance_id, volume_group_id, mount_point, automount)
+
+        return volume_group_id
 
 
 
@@ -220,10 +319,10 @@ class SnapshotManager(BaseManager):
         raid_type = 'raid'
         if len(snapshots) == 1:
             raid_type = 'single'
-        self.__db.execute("INSERT INTO snapshot_groups(volume_group_id, raid_level, stripe_block_size, fs_type, block_device, group_type, tags) "
+        self.db.execute("INSERT INTO snapshot_groups(volume_group_id, raid_level, stripe_block_size, fs_type, block_device, group_type, tags) "
                           "VALUES(%s,%s,%s,%s,%s,%s,%s)", (volume_group_id, raid_level, stripe_block_size, filesystem, block_device, raid_type, tags))
-        self.__dbconn.commit()
-        snapshot_group_id = self.__db.lastrowid
+        self.dbconn.commit()
+        snapshot_group_id = self.db.lastrowid
 
         print snapshot_group_id
 
@@ -233,11 +332,19 @@ class SnapshotManager(BaseManager):
 
             if expiry_date:
                 expdate = expiry_date.strftime('%Y-%m-%d %H:%M:%S')
-            self.__db.execute("INSERT INTO snapshots(snapshot_id, snapshot_group_id, volume_id, size, piops, block_device, raid_device_id, region, tags, expiry_date)"
-                              "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (snapshots[x]['snapshot_id'], snapshots[x]['snapshot_group_id'], snapshots[x]['volume_id'],
-                                                                    snapshots[x]['size'], snapshots[x]['piops'], snapshots[x]['block_device'], snapshots[x]['raid_device_id'],
-                                                                    snapshots[x]['region'], snapshots[x]['tags'], expdate))
-            self.__dbconn.commit()
+            self.db.execute("INSERT INTO snapshots(snapshot_id, snapshot_group_id, volume_id, size, piops, block_device, raid_device_id, region, tags, expiry_date, description)"
+                              "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (snapshots[x]['snapshot_id'],
+                                                                           snapshots[x]['snapshot_group_id'],
+                                                                           snapshots[x]['volume_id'],
+                                                                           snapshots[x]['size'],
+                                                                           snapshots[x]['piops'],
+                                                                           snapshots[x]['block_device'],
+                                                                           snapshots[x]['raid_device_id'],
+                                                                           snapshots[x]['region'],
+                                                                           snapshots[x]['tags'],
+                                                                           expdate,
+                                                                           snapshots[x]['description'] ))
+            self.dbconn.commit()
 
 
         return snapshot_group_id
@@ -284,14 +391,14 @@ class SnapshotManager(BaseManager):
         insert_vars.append(schedule.post_command)
         insert_vars.append(schedule.description)
 
-        self.__db.execute(sql, insert_vars)
-        self.__dbconn.commit()
-        schedule.schedule_id = self.__db.lastrowid
+        self.db.execute(sql, insert_vars)
+        self.dbconn.commit()
+        schedule.schedule_id = self.db.lastrowid
         return schedule
 
     def delete_snapshot_schedule(self, schedule_id):
-        self.__db.execute("delete from snapshot_schedules where schedule_id=%s",(schedule_id, ))
-        self.__dbconn.commit()
+        self.db.execute("delete from snapshot_schedules where schedule_id=%s",(schedule_id, ))
+        self.dbconn.commit()
 
     def edit_snapshot_schedule(self, schedule_id, updates):
         sql = "update snapshot_schedules set "
@@ -306,8 +413,8 @@ class SnapshotManager(BaseManager):
         sql += ', '.join(sets)
         sql += " where schedule_id=%s"
         update_vars.append(schedule_id)
-        self.__db.execute(sql, update_vars)
-        self.__dbconn.commit()
+        self.db.execute(sql, update_vars)
+        self.dbconn.commit()
 
 
     def run_snapshot_schedule(self, schedule_id=None):
@@ -336,14 +443,14 @@ class SnapshotManager(BaseManager):
                   "left join host_volumes hv on hv.instance_id=h.instance_id and hv.mount_point=ss.mount_point"
 
         if schedule_id:
-            self.__db.execute(sql + " where schedule_id=%s", (schedule_id, ))
-            schedules = self.__db.fetchall()
+            self.db.execute(sql + " where schedule_id=%s", (schedule_id, ))
+            schedules = self.db.fetchall()
             if not schedules:
                 print "Schedule not found"
                 return
         else:
-            self.__db.execute(sql)
-            schedules = self.__db.fetchall()
+            self.db.execute(sql)
+            schedules = self.db.fetchall()
             if not schedules:
                 print "No snapshot schedules found"
                 return
@@ -381,7 +488,7 @@ class SnapshotManager(BaseManager):
                 self.snapshot_volume_group(volume_group_id=volume_group_id, description=schedule[17], pre_command=schedule[15], post_command=schedule[16], expiry_date=expiry_date)
 
 
-    def get_snapshot_struct(self, snapshot_id, size, raid_device_id, volume_id, region, block_device=None, piops=None, snapshot_group_id=None, tags=None):
+    def get_snapshot_struct(self, snapshot_id, size, raid_device_id, volume_id, region, block_device=None, piops=None, snapshot_group_id=None, tags=None, description=None):
         struct = {
             'snapshot_id': snapshot_id,
             'snapshot_group_id': snapshot_group_id,
@@ -391,22 +498,25 @@ class SnapshotManager(BaseManager):
             'block_device': block_device,
             'raid_device_id': raid_device_id,
             'region': region,
-            'tags': tags
+            'tags': tags,
+            'description': description,
         }
 
         return struct
 
     def argument_parser_builder(self, parser):
         ssubparser = parser.add_subparsers(title="action", dest='action')
-
+        # ams snapshot create
         screateparser = ssubparser.add_parser("create", help="Create a snapshot group of a volume group")
         screatesubparser = screateparser.add_subparsers(title="resource", dest='resource')
+        # ams snapshot create volume
         screatevolparser = screatesubparser.add_parser("volume", help="create a snapshot of a given volume_group_id")
         screatevolparser.add_argument('volume_group_id', type=int, help="ID of the volume group to snapshot")
         screatevolparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
         screatevolparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
         screatevolparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
         screatevolparser.set_defaults(func=self.command_snapshot_create_volume)
+        # ams snapshot host
         screatehostparser = screatesubparser.add_parser("host", help="create a snapshot of a specific volume group on a host")
         group = screatehostparser.add_mutually_exclusive_group(required=True)
         group.add_argument('-i', '--instance', help="instance_id of an instance to snapshot a volume group")
@@ -418,17 +528,50 @@ class SnapshotManager(BaseManager):
         screatehostparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
         screatehostparser.set_defaults(func=self.command_snapshot_create_host)
 
+
+        # shared arguments for all of the snapshot clone
+        cloneargs = argparse.ArgumentParser(add_help=False)
+        group = cloneargs.add_mutually_exclusive_group(required=True)
+        group.add_argument("-z", "--zone", help="Availability zone to create the new volume group in")
+        group.add_argument("-i", "--instance", help="instance id to attach the new volume group to")
+        group.add_argument("-H", "--host", help="hostname to attache the new volume group to")
+        cloneargs.add_argument("-m", "--mount_point", help="directory to mount the new volume group to")
+        cloneargs.add_argument("-a", "--no-automount", help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
+        cloneargs.add_argument("-p", "--piops", type=int, help="Per EBS volume provisioned iops. Set to 0 to explicitly disable provisioned iops. If not provided then the iops of the original volumes will be used.")
+        # ams snapshot clone
+        scloneparser = ssubparser.add_parser("clone", help="Clone a snapshot group into a new volume group")
+        sclonesubparser = scloneparser.add_subparsers(title='type', dest='type')
+        scloneparser.set_defaults(func=self.command_snapshot_clone)
+        # ams snapshot clone snapshot
+        sclonesnapparser = sclonesubparser.add_parser("snapshot", help="Clone a specific snapshot group", parents=[cloneargs])
+        sclonesnapparser.add_argument('snapshot_group_id', type=int, help="ID of the snapshot group to clone")
+        # ams snapshot clone latest
+        sclonelatestparser = sclonesubparser.add_parser("latest", help="Clone the latest snapshot of a volume group")
+        sclonelatestsubparser = sclonelatestparser.add_subparsers(title='sub-type', dest='subtype')
+        # ams snapshot clone latest volume
+        sclonelatestvolumeparser = sclonelatestsubparser.add_parser("volume", help="Clone the latest snapshot for a volume group", parents=[cloneargs])
+        sclonelatestvolumeparser.add_argument('volume_group_id', type=int, help="ID of the volume group to clone")
+        # ams snapshot clone latest host
+        sclonelatesthostparser = sclonelatestsubparser.add_parser("host", help="Clone the latest snapshot for a host & mount point", parents=[cloneargs])
+        sclonelatesthostparser.add_argument('hostname', type=int, help="hostname with the volume group to clone")
+        sclonelatesthostparser.add_argument("src_mount_point", type=int, help="mount point of the volume group to clone")
+        # ams snapshot clone latest instance
+        sclonelatestinstanceparser = sclonelatestsubparser.add_parser("instance", help="Clone the latest snapshot for an instance_id & mount point", parents=[cloneargs])
+        sclonelatestinstanceparser.add_argument('instance_id', type=int, help="instance_id of the host with the volume group to clone")
+        sclonelatestinstanceparser.add_argument("src_mount_point", type=int, help="mount point of the volume group to clone")
+
+
+        # ams snapshot schedule
         sscheduleparser = ssubparser.add_parser("schedule", help="View, add or edit snapshot schedules")
         sschedulesubparser = sscheduleparser.add_subparsers(title="subaction", dest='subaction')
-
+        # ams snapshot schedule list
         sschedulelistparser = sschedulesubparser.add_parser("list", help="List snapshot schedules")
         sschedulelistparser.add_argument('resource', nargs='?', help="host, instance, or volume", choices=['host', 'volume', 'instance'])
         sschedulelistparser.add_argument('resource_id', nargs='?', help="hostname, instance_id or volume_group_id")
         sschedulelistparser.add_argument("--like", help="search string to use when listing resources")
         sschedulelistparser.add_argument("--prefix", help="search string prefix to use when listing resources")
         sschedulelistparser.set_defaults(func=self.command_snapshot_schedule_list)
-
-
+        # ams snapshot schedule add/edit shared args
         scheduleaddshared = argparse.ArgumentParser(add_help=False)
         scheduleaddshared.add_argument('-i', '--intervals', type=int, nargs=4, help='Set all intervals at once', metavar=('HOUR', 'DAY', 'WEEK', 'MONTH'))
         scheduleaddshared.add_argument('-r', '--retentions', type=int, nargs=5, help='Set all retentions at once', metavar=('HOURS', 'DAYS', 'WEEKS', 'MONTHS', 'YEARS'))
@@ -444,35 +587,106 @@ class SnapshotManager(BaseManager):
         scheduleaddshared.add_argument("--pre", dest="pre_command", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
         scheduleaddshared.add_argument("--post", dest="post_command", help="command to run on host after snapshot (will not be run if volume group is not attached)")
         scheduleaddshared.add_argument('-d', "--description", help="description to add to snapshot")
-
+        # ams snapshot schedule add
         sscheduleaddparser = sschedulesubparser.add_parser("add", help="Create a new snapshot schedule")
         sscheduleaddparser.set_defaults(func=self.command_snapshot_schedule_add)
         sscheduleaddsubparser = sscheduleaddparser.add_subparsers(title="resource", dest="resource")
+        # ams snapshot schedule add host
         sscheduleaddhostparser = sscheduleaddsubparser.add_parser("host", help="add a snapshot to the schedule for a specific hostname (recommended)", parents=[scheduleaddshared])
         sscheduleaddhostparser.add_argument("hostname", help="hostname to schedule snapshots for")
         group = sscheduleaddhostparser.add_mutually_exclusive_group(required=True)
         group.add_argument('-m', '--mount-point', help="mount point of the volume group to snapshot")
+        # ams snapshot schedule add instance
         sscheduleaddinstparser = sscheduleaddsubparser.add_parser("instance", help="add a snapshot to the schedule for a specific instance_id", parents=[scheduleaddshared])
         sscheduleaddinstparser.add_argument("instance_id", help="instance_id to schedule snapshots for")
         group = sscheduleaddinstparser.add_mutually_exclusive_group(required=True)
         group.add_argument('-m', '--mount-point', help="mount point of the volume group to snapshot")
+        # ams snapshot schedule add volume
         sscheduleaddinstparser = sscheduleaddsubparser.add_parser("volume", help="add a snapshot to the schedule for a specific volume_group_id", parents=[scheduleaddshared])
         sscheduleaddinstparser.add_argument("volume_group_id", help="volume_group_id to schedule snapshots for")
-
+        # ams snapshot schedule edit
         sscheduleeditparser = sschedulesubparser.add_parser("edit", help="Edit a snapshot schedule. hostname, instance_id, volume_group_id, and mount_point cannot be edited", parents=[scheduleaddshared])
         sscheduleeditparser.add_argument('schedule_id', type=int, help="Snapshot schedule_id to edit (use 'ams snapshot schedule list' to list available schedules)")
         sscheduleeditparser.set_defaults(func=self.command_snapshot_schedule_edit)
-
+        # ams snapshot schedule delete
         sscheduledelparser = sschedulesubparser.add_parser("delete", help="Delete a snapshot schedule", parents=[scheduleaddshared])
         sscheduledelparser.add_argument('schedule_id', type=int, help="Snapshot schedule_id to delete (use 'ams snapshot schedule list' to list available schedules)")
         sscheduledelparser.set_defaults(func=self.command_snapshot_schedule_delete)
-
+        # ams snapshot schedule run
         sschedulerunparser = sschedulesubparser.add_parser("run", help="Run the scheduled snapshots now")
         sschedulerunparser.add_argument('schedule_id', nargs='?', type=int, help="Snapshot schedule_id to run. If not supplied, then whatever is scheduled for the current time will run")
         sschedulerunparser.set_defaults(func=self.command_snapshot_schedule_run)
 
 
+    def command_snapshot_clone(self, args):
+        zone = None
+        mount_point = None
+        automount = True
+        instance_id = None
+        if args.host:
+            self.db.execute("select availability_zone, instance_id from hosts where host=%s", (args.host, ))
+            r = self.db.fetchone()
+            if not r:
+                print "Host '{}' not found".format(args.host)
+                return
+            zone, instance_id = r
+            if args.no_automount:
+                automount = False
+            mount_point = args.mount_point
+        elif args.instance:
+            self.db.execute("select availability_zone from hosts where instance_id=%s", (args.instance, ))
+            r = self.db.fetchone()
+            if not r:
+                print "Instance '{}' not found".format(args.instance)
+                return
+            zone = r[0]
+            if args.no_automount:
+                automount = False
+            mount_point = args.mount_point
+            instance_id = args.instance
+        elif args.zone:
+            zone = args.zone
 
+        snapshot_group_id = None
+        if args.type == 'snapshot':
+            snapshot_group_id = args.snapshot_group_id
+            pass
+        elif args.type == 'latest':
+            if args.subtype == "volume":
+                self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (args.volume_group_id, ))
+                r = self.db.fetchone()
+                if not r:
+                    print "No snapshots found for volume group {}".format(args.volume_group_id)
+                    return
+                snapshot_group_id = r[0]
+            elif args.subtype == "host":
+                self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where host=%s and mount_point=%s", (args.host, args.src_mount_point))
+                r = self.db.fetchone()
+                if not r:
+                    print "Volume group not found for {} on {}".format(args.src_mount_point, args.host)
+                    return
+                self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (r[0], ))
+                r = self.db.fetchone()
+                if not r:
+                    print "No snapshots found for {} on {}".format(args.src_mount_point, args.host)
+                    return
+                snapshot_group_id = r[0]
+
+            elif args.subtype == "instance":
+                self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where h.instance_id=%s and mount_point=%s", (args.instance, args.src_mount_point))
+                r = self.db.fetchone()
+                if not r:
+                    print "Volume group not found for {} on {}".format(args.src_mount_point, args.instance)
+                    return
+                self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (r[0], ))
+                r = self.db.fetchone()
+                if not r:
+                    print "No snapshots found for {} on {}".format(args.src_mount_point, args.instance)
+                    return
+                snapshot_group_id = r[0]
+
+        volume_group_id = self.clone_snapshot_group(snapshot_group_id, zone, args.piops, instance_id, mount_point, automount)
+        print "Volume group {} created".format(volume_group_id)
 
     def command_snapshot_create_volume(self, args):
         self.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
@@ -494,8 +708,8 @@ class SnapshotManager(BaseManager):
               "hosts h " \
               "left join host_volumes hv on h.instance_id=hv.instance_id "
         sql += " where " + " and ".join(whereclauses)
-        self.__db.execute(sql)
-        res = self.__db.fetchone()
+        self.db.execute(sql)
+        res = self.db.fetchone()
         if res:
             self.snapshot_volume_group(res[0], args.description, args.pre, args.post)
         else:
@@ -540,8 +754,8 @@ class SnapshotManager(BaseManager):
         if whereclauses:
             sql += " and ".join(whereclauses)
         sql += order_by
-        self.__db.execute(sql)
-        results = self.__db.fetchall()
+        self.db.execute(sql)
+        results = self.db.fetchall()
         if self.settings.human_output:
             print "Snapshot Schedules:"
             print "schedule_id\thostname\tinstance_id\tmount_point\tvolume_group_id\tintervals(h-d-w-m)\tretentions(h-d-w-m-y)\tpre_command\tpost_command\tdescription"

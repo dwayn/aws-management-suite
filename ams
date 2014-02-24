@@ -8,7 +8,7 @@ from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.ebs.snapshot import SnapshotSchedule
 # DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 2
+DATABASE_VERSION = 3
 #############################
 
 
@@ -82,6 +82,7 @@ def upgrade_db(args):
         sqlfile = open(filename, "r")
         sql = sqlfile.read()
         db.execute(sql)
+        dbconn.commit()
         db.execute("insert into config set var=%s, value=%s on duplicate key update value=%s", ('DATABASE_VERSION', str(i), str(i)))
         dbconn.commit()
 
