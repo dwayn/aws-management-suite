@@ -27,17 +27,24 @@ snapmanager = SnapshotManager(settings)
 
 def host_list(args):
     whereclauses = []
+    order_by = ''
     if args.search_field:
-        if args.like:
+        if args.field_value:
+            whereclauses.append("{0} = '{1}'".format(args.search_field, args.field_value))
+        elif args.like:
             whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.like))
         elif args.prefix:
             whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.prefix))
+        order_by = ' order by {0}'.format(args.search_field)
     if args.zone:
         whereclauses.append("availability_zone like '{0}%'".format(args.zone))
 
     sql = "select host, instance_id, availability_zone from hosts"
     if len(whereclauses):
         sql += " where " + " and ".join(whereclauses)
+        if not order_by:
+            order_by = ' order by availability_zone'
+    sql += order_by
     db.execute(sql)
     results = db.fetchall()
 
@@ -106,7 +113,8 @@ def main():
     hparser = subparsers.add_parser("host", help="direct host/instance related operations")
     hsubparser = hparser.add_subparsers(title="action", dest='action')
     hlistparser = hsubparser.add_parser("list")
-    hlistparser.add_argument('search_field', nargs="?", help="field to search", choices=['host', 'instance_id'])
+    hlistparser.add_argument('search_field', nargs="?", help="field to search (host or instance_id)", choices=['host', 'instance_id'])
+    hlistparser.add_argument('field_value', nargs="?", help="exact match search value")
     hlistparser.add_argument("--like", help="string to find within 'search-field'")
     hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
     hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
