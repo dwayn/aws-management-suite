@@ -454,6 +454,7 @@ class VolumeManager(BaseManager):
 
         vlistparser = vsubparser.add_parser("list")
         vlistparser.add_argument('search_field', nargs="?", help="field to search", choices=['host', 'instance_id'])
+        vlistparser.add_argument('field_value', nargs="?", help="exact match search value")
         vlistparser.add_argument("--like", help="search string to use when listing resources")
         vlistparser.add_argument("--prefix", help="search string prefix to use when listing resources")
         vlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
@@ -499,40 +500,47 @@ class VolumeManager(BaseManager):
 
     def command_volume_list(self, args):
         whereclauses = []
+        order_by = ''
         if args.search_field:
             if args.search_field in ('host', 'instance_id'):
                 args.search_field = "h." + args.search_field
-            if args.like:
+            if args.field_value:
+                whereclauses.append("{0} = '{1}'".format(args.search_field, args.field_value))
+            elif args.like:
                 whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.like))
             elif args.prefix:
                 whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.prefix))
+            order_by = ' order by {0}'.format(args.search_field)
         if args.zone:
-            whereclauses.append("h.availability_zone like '{0}%'".format(args.zone))
+            whereclauses.append("v.availability_zone like '{0}%'".format(args.zone))
+            if not order_by:
+                order_by = ' order by v.availability_zone'
 
         sql = "select " \
-                "host, " \
-                "h.instance_id, " \
-                "h.availability_zone, " \
                 "vg.volume_group_id, " \
+                "v.availability_zone, " \
                 "count(*) as volumes_in_group, " \
                 "raid_level, " \
                 "sum(size) as GiB, " \
-                "piops " \
+                "piops, " \
+                "h.instance_id, " \
+                "host " \
                 "from " \
-                "hosts h " \
-                "left join host_volumes hv on h.instance_id=hv.instance_id " \
-                "left join volume_groups vg on vg.volume_group_id=hv.volume_group_id " \
-                "left join volumes v on v.volume_group_id=vg.volume_group_id"
+                "volume_groups vg " \
+                "left join volumes v on v.volume_group_id=vg.volume_group_id " \
+                "left join host_volumes hv on vg.volume_group_id=hv.volume_group_id " \
+                "left join hosts h on h.instance_id=hv.instance_id "
 
         if len(whereclauses):
             sql += " where " + " and ".join(whereclauses)
         sql += " group by vg.volume_group_id"
+        sql += order_by
         self.db.execute(sql)
         results = self.db.fetchall()
 
         if self.settings.human_output:
             print "Volumes found:\n"
-            print "Hostname\tinstance_id\tavailability_zone\tvolume_group_id\tvolumes_in_group\traid_level\tGiB\tiops"
+            print "volume_group_id\tavailability_zone\tvolumes_in_group\traid_level\tGiB\tiops\tinstance_id\thostname"
             print "--------------------------------------------------------------"
         for res in results:
             print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7])

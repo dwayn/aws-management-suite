@@ -38,12 +38,12 @@ def host_list(args):
         order_by = ' order by {0}'.format(args.search_field)
     if args.zone:
         whereclauses.append("availability_zone like '{0}%'".format(args.zone))
+        if not order_by:
+            order_by = ' order by availability_zone'
 
     sql = "select host, instance_id, availability_zone from hosts"
     if len(whereclauses):
         sql += " where " + " and ".join(whereclauses)
-        if not order_by:
-            order_by = ' order by availability_zone'
     sql += order_by
     db.execute(sql)
     results = db.fetchall()

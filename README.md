@@ -54,8 +54,6 @@ There are still a few legacy command structures that need to be cleaned up, so t
 With no options this lists all host entries in the database
 
     optional arguments:
-      --like LIKE         string to find within 'search-field'
-      --prefix PREFIX     string to prefix match against 'search-field'
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
@@ -88,8 +86,126 @@ If `instance id` is given then it will match instance_id exactly
 ----
 
 ## Volumes
+#### `ams volume list`
+With no options this lists all volume groups in the database
+
+    optional arguments:
+      --zone ZONE         Availability zone to filter results by. This is a prefix
+                          search so any of the following is valid with increasing
+                          specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
+
+----
+
+#### `ams volume list host [hostname]`
+Lists the volume groups for a host or hosts<br>
+If `hostname` is given then it will match hostname exactly
+
+    optional arguments:
+      --like LIKE         wildcard matches hostname
+      --prefix PREFIX     prefix matches hostname
+      --zone ZONE         Availability zone to filter results by. This is a prefix
+                          search so any of the following is valid with increasing
+                          specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
 
 
+----
+
+#### `ams volume list instance_id [instance_id]`
+Lists the volume groups for an instance or instances<br>
+If `instance id` is given then it will match instance_id exactly
+
+    optional arguments:
+      --like LIKE         wildcard matches instance id
+      --prefix PREFIX     prefix matches instance id
+      --zone ZONE         Availability zone to filter results by. This is a prefix
+                          search so any of the following is valid with increasing
+                          specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
+
+
+----
+
+#### `ams volume create`
+Creates a new volume group (single or multiple disk) and attaches to host. Optionally mounts the volume and configures automounting.
+
+Required args: (host | instance), numvols, size
+
+Defaults:
+
+ * stripe-block-size: `256`  (256k chunk size recommended for performance of EBS stripes using xfs)
+ * raid-level: `0`
+ * filesystem: `xfs`  (note: currently due to implementation constrictions filesystem must be one of the types that can be formatted using mkfs.*)
+ * iops: `None`
+ * mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
+ * no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
+
+
+    optional arguments:
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to attach new volume group
+      -H HOST, --host HOST  hostname of an instance to attach new volume group
+      -n NUMVOLS, --numvols NUMVOLS
+                            Number of EBS volumes to create for the new volume
+                            group
+      -r {0,1,5,10}, --raid-level {0,1,5,10}
+                            Set the raid level for new EBS raid
+      -b STRIPE_BLOCK_SIZE, --stripe-block-size STRIPE_BLOCK_SIZE
+                            Set the stripe block/chunk size for new EBS raid
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            Set the mount point for volume. Not required, but
+                            suggested
+      -a, --no-automount    Disable configuring the OS to automatically mount the
+                            volume group on reboot
+      -f FILESYSTEM, --filesystem FILESYSTEM
+                            Filesystem to partition new raid/volume
+      -s SIZE, --size SIZE  Per EBS volume size in GiBs
+      -p IOPS, --iops IOPS  Per EBS volume provisioned iops
+
+----
+
+#### `ams volume attach (volume_group_id)`
+Attaches provided volume_group_id to a host. Optionally mounts the volume and configures automounting.
+Required args: (host | instance)
+
+Defaults:
+
+ * mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
+ * no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
+
+
+    optional arguments:
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to attach new volume group
+      -H HOST, --host HOST  hostname of an instance to attach new volume group
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            Set the mount point for volume. Not required, but
+                            suggested
+      -a, --no-automount    Disable configuring the OS to automatically mount the
+                            volume group on reboot
+
+----
+
+#### `ams volume mount (volume_group_id)`
+Mount a volume group on the host that it is currently attached. Supports mounting to a given mount point or the currently defined mount point for the volume group.
+
+    optional arguments:
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            Set the mount point for volume. If not provided, will
+                            attempt to use currently defined mount point
+      -a, --no-automount    Disable configure the OS to automatically mount the
+                            volume group on reboot
+
+----
+
+#### `ams volume automount`
+Configure automounting for a volume group. If mount point is not provided then it will use the currently defined mount point for the volume.
+If neither of these exist then it will configure automounting of the volume where it is currently mounted, otherwise it will fail configuring automounting.
+
+    optional arguments:
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            Set the mount point for volume. If not provided, will
+                            attempt to use currently defined mount point
+
+----
 
 ## Snapshots
 
