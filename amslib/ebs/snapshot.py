@@ -165,7 +165,7 @@ class SnapshotManager(BaseManager):
         snaps = {}
         for s in sginfo:
             snap_details[s[0]] = s[:11]
-            id = botoconn.copy_snapshot(s[8], s[0], "Copy of {} from {}".format(s[0], s[8]))
+            id = botoconn.copy_snapshot(s[8], s[0], "Copy of {0} from {0}".format(s[0], s[8]))
             snaps[id] = s[0]
 
         time.sleep(2)
@@ -173,7 +173,7 @@ class SnapshotManager(BaseManager):
         snapshots = []
         for snap in new_snaps:
             details = snap_details[snaps[snap.id]]
-            snapshotdata = self.get_snapshot_struct(snap.id, details[2], details[5], details[1], region, details[4], details[3], None, details[9], "Copy of {} from {}".format(details[0], details[8]))
+            snapshotdata = self.get_snapshot_struct(snap.id, details[2], details[5], details[1], region, details[4], details[3], None, details[9], "Copy of {0} from {1}".format(details[0], details[8]))
             snapshots.append(snapshotdata)
 
         pending = True
@@ -182,7 +182,7 @@ class SnapshotManager(BaseManager):
             for snap in new_snaps:
                 snap.update()
                 if snap.status == 'error':
-                    raise SnapshotCreateError("Error creating snapshot {} as a copy of snapshot {}".format(snap.id, snaps[snap.id]))
+                    raise SnapshotCreateError("Error creating snapshot {0} as a copy of snapshot {1}".format(snap.id, snaps[snap.id]))
                 if snap.status == 'pending':
                     pending = True
 
@@ -226,7 +226,7 @@ class SnapshotManager(BaseManager):
                           "where sg.snapshot_group_id=%s", (snapshot_group_id, ))
         snapshot_group = self.db.fetchall()
         if not snapshot_group:
-            raise SnapshotNotFound("Snapshot group {} not found".format(snapshot_group_id))
+            raise SnapshotNotFound("Snapshot group {0} not found".format(snapshot_group_id))
 
         source_region = snapshot_group[0][5]
         volume_group_id = snapshot_group[0][7]
@@ -256,7 +256,7 @@ class SnapshotManager(BaseManager):
             ready = True
             for s in snapshots:
                 if s.status == 'error':
-                    raise SnapshotError('Snapshot {} is in an error state, unable to clone snapshot group {}.'.format(s.id, snapshot_group_id))
+                    raise SnapshotError('Snapshot {0} is in an error state, unable to clone snapshot group {1}.'.format(s.id, snapshot_group_id))
                 if s.status == 'pending':
                     ready = False
 
@@ -297,7 +297,7 @@ class SnapshotManager(BaseManager):
                 if v.volume_state() == 'creating':
                     available = False
                 elif v.volume_state() == 'error':
-                    raise VolumeNotAvailable("Error creating volume {}".format(v.id))
+                    raise VolumeNotAvailable("Error creating volume {0}".format(v.id))
             time.sleep(2)
 
         # and available software raid device will be picked when the raid is assembled
@@ -627,7 +627,7 @@ class SnapshotManager(BaseManager):
             self.db.execute("select availability_zone, instance_id from hosts where host=%s", (args.host, ))
             r = self.db.fetchone()
             if not r:
-                print "Host '{}' not found".format(args.host)
+                print "Host '{0}' not found".format(args.host)
                 return
             zone, instance_id = r
             if args.no_automount:
@@ -637,7 +637,7 @@ class SnapshotManager(BaseManager):
             self.db.execute("select availability_zone from hosts where instance_id=%s", (args.instance, ))
             r = self.db.fetchone()
             if not r:
-                print "Instance '{}' not found".format(args.instance)
+                print "Instance '{0}' not found".format(args.instance)
                 return
             zone = r[0]
             if args.no_automount:
@@ -656,19 +656,19 @@ class SnapshotManager(BaseManager):
                 self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (args.volume_group_id, ))
                 r = self.db.fetchone()
                 if not r:
-                    print "No snapshots found for volume group {}".format(args.volume_group_id)
+                    print "No snapshots found for volume group {0}".format(args.volume_group_id)
                     return
                 snapshot_group_id = r[0]
             elif args.subtype == "host":
                 self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where host=%s and mount_point=%s", (args.host, args.src_mount_point))
                 r = self.db.fetchone()
                 if not r:
-                    print "Volume group not found for {} on {}".format(args.src_mount_point, args.host)
+                    print "Volume group not found for {0} on {1}".format(args.src_mount_point, args.host)
                     return
                 self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (r[0], ))
                 r = self.db.fetchone()
                 if not r:
-                    print "No snapshots found for {} on {}".format(args.src_mount_point, args.host)
+                    print "No snapshots found for {0} on {1}".format(args.src_mount_point, args.host)
                     return
                 snapshot_group_id = r[0]
 
@@ -676,17 +676,17 @@ class SnapshotManager(BaseManager):
                 self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where h.instance_id=%s and mount_point=%s", (args.instance, args.src_mount_point))
                 r = self.db.fetchone()
                 if not r:
-                    print "Volume group not found for {} on {}".format(args.src_mount_point, args.instance)
+                    print "Volume group not found for {0} on {1}".format(args.src_mount_point, args.instance)
                     return
                 self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (r[0], ))
                 r = self.db.fetchone()
                 if not r:
-                    print "No snapshots found for {} on {}".format(args.src_mount_point, args.instance)
+                    print "No snapshots found for {0} on {1}".format(args.src_mount_point, args.instance)
                     return
                 snapshot_group_id = r[0]
 
         volume_group_id = self.clone_snapshot_group(snapshot_group_id, zone, args.piops, instance_id, mount_point, automount)
-        print "Volume group {} created".format(volume_group_id)
+        print "Volume group {0} created".format(volume_group_id)
 
     def command_snapshot_create_volume(self, args):
         self.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
@@ -695,12 +695,12 @@ class SnapshotManager(BaseManager):
     def command_snapshot_create_host(self, args):
         whereclauses = []
         if args.instance:
-            whereclauses.append("h.instance_id = '{}'".format(args.instance))
+            whereclauses.append("h.instance_id = '{0}'".format(args.instance))
         elif args.host:
-            whereclauses.append("h.host = '{}'".format(args.host))
+            whereclauses.append("h.host = '{0}'".format(args.host))
 
         if args.mount_point:
-            whereclauses.append("hv.mount_point = '{}'".format(args.mount_point))
+            whereclauses.append("hv.mount_point = '{0}'".format(args.mount_point))
 
         sql = "select " \
               "hv.volume_group_id " \
@@ -716,28 +716,29 @@ class SnapshotManager(BaseManager):
             print "Volume group not found"
             exit(1)
 
+    #TODO refactor how the query is being built to not build the sql string directly but use %s instead
     def command_snapshot_schedule_list(self, args):
         whereclauses = []
         order_by = ''
         if args.resource == 'host':
             if args.resource_id:
-                whereclauses.append("hostname = '{}'".format(args.resource_id))
+                whereclauses.append("hostname = '{0}'".format(args.resource_id))
             elif args.prefix:
-                whereclauses.append("hostname like '{}%'".format(args.prefix))
+                whereclauses.append("hostname like '{0}%'".format(args.prefix))
             elif args.like:
-                whereclauses.append("hostname like '%{}%'".format(args.like))
+                whereclauses.append("hostname like '%{0}%'".format(args.like))
             order_by = " order by hostname asc"
         elif args.resource == 'instance':
             if args.resource_id:
-                whereclauses.append("instance_id = '{}'".format(args.resource_id))
+                whereclauses.append("instance_id = '{0}'".format(args.resource_id))
             elif args.prefix:
-                whereclauses.append("instance_id like '{}%'".format(args.prefix))
+                whereclauses.append("instance_id like '{0}%'".format(args.prefix))
             elif args.like:
-                whereclauses.append("instance_id like '%{}%'".format(args.like))
+                whereclauses.append("instance_id like '%{0}%'".format(args.like))
             order_by = " order by instance_id asc"
         elif args.resource == 'volume':
             if args.resource_id:
-                whereclauses.append("volume_group_id = {}".format(args.resource_id))
+                whereclauses.append("volume_group_id = {0}".format(args.resource_id))
 
         sql = "select " \
               "schedule_id," \
@@ -761,7 +762,7 @@ class SnapshotManager(BaseManager):
             print "schedule_id\thostname\tinstance_id\tmount_point\tvolume_group_id\tintervals(h-d-w-m)\tretentions(h-d-w-m-y)\tpre_command\tpost_command\tdescription"
             print "---------------------------------------------------------------------------------------------------------------------------------------------------"
         for res in results:
-            print "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9])
+            print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9])
         if self.settings.human_output:
             print "---------------------------------------------------------------------------------------------------------------------------------------------------"
 

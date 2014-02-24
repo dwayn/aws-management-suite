@@ -58,7 +58,7 @@ class VolumeManager(BaseManager):
                 if v.volume_state() == 'creating':
                     available = False
                 elif v.volume_state() == 'error':
-                    raise VolumeNotAvailable("Error creating volume {}".format(v.id))
+                    raise VolumeNotAvailable("Error creating volume {0}".format(v.id))
             time.sleep(2)
 
         # and available software raid device will be picked when the raid is assembled
@@ -208,7 +208,7 @@ class VolumeManager(BaseManager):
             devcount += 1
             devlist += row[5] + " "
             # /dev/sd
-            md_dev_pattern = '([a-z]+{}).*?'.format(row[5][6:]) + md_dev_pattern
+            md_dev_pattern = '([a-z]+{0}).*?'.format(row[5][6:]) + md_dev_pattern
         md_dev_pattern = '(md[0-9]+).*?' + md_dev_pattern
         fs_type = voldata[0][2]
 
@@ -282,11 +282,11 @@ class VolumeManager(BaseManager):
         sh = SSHManager()
         sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
         #TODO mkdir -p of the mount directory
-        command = "mkdir -p {}".format(mount_point)
+        command = "mkdir -p {0}".format(mount_point)
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
-            raise VolumeMountError("Unable to create mount directory: {}".format(mount_point))
-        command = 'mount {} {} -o {} -t {}'.format(block_device, mount_point, mount_options, fs_type)
+            raise VolumeMountError("Unable to create mount directory: {0}".format(mount_point))
+        command = 'mount {0} {1} -o {2} -t {3}'.format(block_device, mount_point, mount_options, fs_type)
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
             raise VolumeMountError("Error mounting volume with command: {0}\n{1}".format(command, stderr))
@@ -307,7 +307,7 @@ class VolumeManager(BaseManager):
     # mount point, set that mount point in fstab, and save the mount point setting to the database
     def configure_volume_automount(self, volume_group_id, mount_point=None):
         mount_options = "noatime,nodiratime 0 0"
-        block_device_match_pattern = '^({})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
+        block_device_match_pattern = '^({0})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
         self.db.execute("select "
                           "hv.mount_point, "
                           "host, "
@@ -323,7 +323,7 @@ class VolumeManager(BaseManager):
 
         defined_mount_point, host, block_device, group_type, fs_type = info
         if not block_device:
-            raise VolumeMountError("block device is not set for volume group {}, check that the volume group is attached".format(volume_group_id))
+            raise VolumeMountError("block device is not set for volume group {0}, check that the volume group is attached".format(volume_group_id))
 
         sh = SSHManager()
         sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
@@ -343,7 +343,7 @@ class VolumeManager(BaseManager):
         if not mount_point:
             raise VolumeMountError("No mount point defined and none can be determined for volume group".format(volume_group_id))
 
-        new_fstab_line = "{} {} {} {}".format(block_device, mount_point, fs_type, mount_options)
+        new_fstab_line = "{0} {1} {2} {3}".format(block_device, mount_point, fs_type, mount_options)
         stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
         fstab = stdout.split("\n")
         found = False
@@ -358,7 +358,7 @@ class VolumeManager(BaseManager):
             fstab.append(new_fstab_line)
 
         stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
-        sh.sudo("echo '{}' >> /etc/fstab".format("\n".join(fstab)), sudo_password=self.settings.SUDO_PASSWORD)
+        sh.sudo("echo '{0}' >> /etc/fstab".format("\n".join(fstab)), sudo_password=self.settings.SUDO_PASSWORD)
         sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
 
         self.db.execute("update host_volumes set mount_point=%s where volume_group_id=%s", (mount_point, volume_group_id))
@@ -368,7 +368,6 @@ class VolumeManager(BaseManager):
 
         # if problems on debian (or other OS's), there may be more steps needed to get mdadm to autostart
         # http://superuser.com/questions/287462/how-can-i-make-mdadm-auto-assemble-raid-after-each-boot
-        #'^({})\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
         if group_type == 'raid':
             print "Reading /etc/mdadm.conf"
             stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf", sudo_password=self.settings.SUDO_PASSWORD)
@@ -383,13 +382,13 @@ class VolumeManager(BaseManager):
                 if m and m.group(1) == block_device:
                     mdadm_line = m.group(0)
                 else:
-                    stdout, stderr, exit_code = sh.sudo("ls -l --color=never {}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.SUDO_PASSWORD)
+                    stdout, stderr, exit_code = sh.sudo("ls -l --color=never {0}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.SUDO_PASSWORD)
                     if stdout.strip():
                         if os.path.basename(stdout.strip()) == os.path.basename(block_device):
                             mdadm_line = m.group(0).replace(m.group(1), block_device)
 
             if not mdadm_line:
-                raise VolumeMountError("mdadm --detail --scan did not return an mdadm configuration for {}".format(block_device))
+                raise VolumeMountError("mdadm --detail --scan did not return an mdadm configuration for {0}".format(block_device))
 
             found = False
             for i in range(0, len(conf)):
@@ -406,7 +405,7 @@ class VolumeManager(BaseManager):
             sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev', sudo_password=self.settings.SUDO_PASSWORD)
             print "Writing new /etc/mdadm.conf file"
             for line in conf:
-                sh.sudo("echo '{}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
+                sh.sudo("echo '{0}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
 
 
 
@@ -536,7 +535,7 @@ class VolumeManager(BaseManager):
             print "Hostname\tinstance_id\tavailability_zone\tvolume_group_id\tvolumes_in_group\traid_level\tGiB\tiops"
             print "--------------------------------------------------------------"
         for res in results:
-            print "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7])
+            print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7])
         if self.settings.human_output:
             print "--------------------------------------------------------------"
 
@@ -551,7 +550,7 @@ class VolumeManager(BaseManager):
             self.db.execute("select instance_id from hosts where host=%s", (args.host, ))
             row = self.db.fetchone()
             if not row:
-                print "Host {} not found".format(args.host)
+                print "Host {0} not found".format(args.host)
                 return
             instance_id = row[0]
 
