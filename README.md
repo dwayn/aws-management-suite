@@ -242,18 +242,18 @@ Required arguments: (host | instance), mount-point
 
 Arguments:
 
-  -i INSTANCE, --instance INSTANCE
-                        instance_id of an instance to snapshot a volume group
-  -H HOST, --host HOST  hostname of an instance to snapshot a volume group
-  -m MOUNT_POINT, --mount-point MOUNT_POINT
-                        mount point of the volume group to snapshot
-  --pre PRE             command to run on host to prepare for starting EBS
-                        snapshot (will not be run if volume group is not
-                        attached)
-  --post POST           command to run on host after snapshot (will not be run
-                        if volume group is not attached)
-  -d DESCRIPTION, --description DESCRIPTION
-                        description to add to snapshot(s)
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to snapshot a volume group
+      -H HOST, --host HOST  hostname of an instance to snapshot a volume group
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            mount point of the volume group to snapshot
+      --pre PRE             command to run on host to prepare for starting EBS
+                            snapshot (will not be run if volume group is not
+                            attached)
+      --post POST           command to run on host after snapshot (will not be run
+                            if volume group is not attached)
+      -d DESCRIPTION, --description DESCRIPTION
+                            description to add to snapshot(s)
 
 ----
 
