@@ -171,7 +171,8 @@ Arguments:
 
 #### `ams volume attach (volume_group_id)`
 Attaches provided volume_group_id to a host. Optionally mounts the volume and configures automounting.
-Required args: (host | instance)
+
+Required arguments: (host | instance)
 
 Defaults:
 
