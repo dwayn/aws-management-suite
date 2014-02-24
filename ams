@@ -56,8 +56,11 @@ def install_db(args):
     f = inspect.getframeinfo(inspect.currentframe()).filename
     filename = os.path.dirname(os.path.abspath(f)) + '/schema/schema.sql'
     sqlfile = open(filename, "r")
-    sql = sqlfile.read()
-    db.execute(sql)
+    sqlcontents = sqlfile.read()
+    statements = sqlcontents.split("\n\n--\n\n")
+    for sql in statements:
+        db.execute(sql)
+        dbconn.commit()
     db.execute("insert into config set var=%s, value=%s", ('DATABASE_VERSION', str(DATABASE_VERSION)))
     dbconn.commit()
 

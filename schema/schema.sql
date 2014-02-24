@@ -7,6 +7,8 @@ CREATE TABLE `host_volumes` (
   UNIQUE KEY `instance_id_mount_point` (`instance_id`,`mount_point`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+--
+
 CREATE TABLE `hosts` (
   `instance_id` varchar(15) NOT NULL,
   `host` varchar(100) DEFAULT NULL,
@@ -22,6 +24,8 @@ CREATE TABLE `hosts` (
   PRIMARY KEY (`instance_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+--
+
 CREATE TABLE `snapshot_groups` (
   `snapshot_group_id` int(11) NOT NULL AUTO_INCREMENT,
   `volume_group_id` int(11) NOT NULL,
@@ -33,6 +37,8 @@ CREATE TABLE `snapshot_groups` (
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`snapshot_group_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
+
+--
 
 CREATE TABLE `snapshots` (
   `snapshot_id` varchar(20) NOT NULL,
@@ -49,6 +55,8 @@ CREATE TABLE `snapshots` (
   PRIMARY KEY (`snapshot_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+--
+
 CREATE TABLE `volume_groups` (
   `volume_group_id` int(11) NOT NULL AUTO_INCREMENT,
   `raid_level` int(11) NOT NULL,
@@ -59,6 +67,8 @@ CREATE TABLE `volume_groups` (
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`volume_group_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+
+--
 
 CREATE TABLE `volumes` (
   `volume_id` varchar(15) NOT NULL,
@@ -71,6 +81,8 @@ CREATE TABLE `volumes` (
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`volume_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+--
 
 CREATE TABLE `snapshot_schedules` (
   `schedule_id` int(11) NOT NULL AUTO_INCREMENT,
@@ -93,9 +105,10 @@ CREATE TABLE `snapshot_schedules` (
   PRIMARY KEY (`schedule_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+--
+
 CREATE TABLE `config` (
   `var` varchar(50) NOT NULL,
   `value` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`var`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
