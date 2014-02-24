@@ -53,7 +53,8 @@ There are still a few legacy command structures that need to be cleaned up, so t
 ### `ams host list`
 With no options this lists all host entries in the database
 
-    optional arguments:
+Arguments:
+
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
@@ -63,7 +64,8 @@ With no options this lists all host entries in the database
 #### `ams host list host [hostname]`
 If `hostname` is given then it will match hostname exactly
 
-    optional arguments:
+Arguments:
+
       --like LIKE         wildcard matches hostname
       --prefix PREFIX     prefix matches hostname
       --zone ZONE         Availability zone to filter results by. This is a prefix
@@ -76,7 +78,8 @@ If `hostname` is given then it will match hostname exactly
 #### `ams host list instance_id [instance id]`
 If `instance id` is given then it will match instance_id exactly
 
-    optional arguments:
+Arguments:
+
       --like LIKE         wildcard matches instance id
       --prefix PREFIX     prefix matches instance id
       --zone ZONE         Availability zone to filter results by. This is a prefix
@@ -89,7 +92,8 @@ If `instance id` is given then it will match instance_id exactly
 #### `ams volume list`
 With no options this lists all volume groups in the database
 
-    optional arguments:
+Arguments:
+
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
@@ -100,7 +104,8 @@ With no options this lists all volume groups in the database
 Lists the volume groups for a host or hosts<br>
 If `hostname` is given then it will match hostname exactly
 
-    optional arguments:
+Arguments:
+
       --like LIKE         wildcard matches hostname
       --prefix PREFIX     prefix matches hostname
       --zone ZONE         Availability zone to filter results by. This is a prefix
@@ -114,7 +119,8 @@ If `hostname` is given then it will match hostname exactly
 Lists the volume groups for an instance or instances<br>
 If `instance id` is given then it will match instance_id exactly
 
-    optional arguments:
+Arguments:
+
       --like LIKE         wildcard matches instance id
       --prefix PREFIX     prefix matches instance id
       --zone ZONE         Availability zone to filter results by. This is a prefix
@@ -127,7 +133,7 @@ If `instance id` is given then it will match instance_id exactly
 #### `ams volume create`
 Creates a new volume group (single or multiple disk) and attaches to host. Optionally mounts the volume and configures automounting.
 
-Required args: (host | instance), numvols, size
+Required arguments: (host | instance), numvols, size
 
 Defaults:
 
@@ -139,7 +145,8 @@ Defaults:
  * no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
 
 
-    optional arguments:
+Arguments:
+
       -i INSTANCE, --instance INSTANCE
                             instance_id of an instance to attach new volume group
       -H HOST, --host HOST  hostname of an instance to attach new volume group
@@ -171,8 +178,8 @@ Defaults:
  * mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
  * no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
 
+Arguments:
 
-    optional arguments:
       -i INSTANCE, --instance INSTANCE
                             instance_id of an instance to attach new volume group
       -H HOST, --host HOST  hostname of an instance to attach new volume group
@@ -187,7 +194,8 @@ Defaults:
 #### `ams volume mount (volume_group_id)`
 Mount a volume group on the host that it is currently attached. Supports mounting to a given mount point or the currently defined mount point for the volume group.
 
-    optional arguments:
+Arguments:
+
       -m MOUNT_POINT, --mount-point MOUNT_POINT
                             Set the mount point for volume. If not provided, will
                             attempt to use currently defined mount point
@@ -200,7 +208,8 @@ Mount a volume group on the host that it is currently attached. Supports mountin
 Configure automounting for the volume_group_id. If mount point is not provided then it will use the currently defined mount point for the volume.
 If neither of these exist then it will configure automounting of the volume where it is currently mounted, otherwise it will fail configuring automounting.
 
-    optional arguments:
+Arguments:
+
       -m MOUNT_POINT, --mount-point MOUNT_POINT
                             Set the mount point for volume. If not provided, will
                             attempt to use currently defined mount point
