@@ -45,7 +45,7 @@ If you have updated the code base, just run `ams internals database upgrade` to 
 
 ## General
 All of the functionality is through the command line tool `ams`. It has been implemented as a multi-level nested command parser using the argparse module.<br>
-If at any point you need help just add `-h` or `--help` flag to the command line and it will list all available sub-commands and options for the current command.<br>
+If at any point you need help just add `-h` or `--help` flag to the command line and it will list all available sub-commands and options for the current command level.<br>
 There are still a few legacy command structures that need to be cleaned up, so there may be some minor changes to the syntax to a few of these, but I will attempt to keep these to an absolute minimum.
 
 
@@ -133,7 +133,7 @@ Arguments:
 #### `ams volume create`
 Creates a new volume group (single or multiple disk) and attaches to host. Optionally mounts the volume and configures automounting.
 
-Required arguments: (host | instance), numvols, size
+Required arguments: (--host | --instance), --numvols, --size
 
 Defaults:
 
@@ -172,7 +172,7 @@ Arguments:
 #### `ams volume attach (volume_group_id)`
 Attaches provided volume_group_id to a host. Optionally mounts the volume and configures automounting.
 
-Required arguments: (host | instance)
+Required arguments: volume_group_id, (--host | --instance)
 
 Defaults:
 
@@ -195,6 +195,8 @@ Arguments:
 #### `ams volume mount (volume_group_id)`
 Mount a volume group on the host that it is currently attached. Supports mounting to a given mount point or the currently defined mount point for the volume group.
 
+Required arguments: volume_group_id
+
 Arguments:
 
       -m MOUNT_POINT, --mount-point MOUNT_POINT
@@ -209,6 +211,8 @@ Arguments:
 Configure automounting for the volume_group_id. If mount point is not provided then it will use the currently defined mount point for the volume.
 If neither of these exist then it will configure automounting of the volume where it is currently mounted, otherwise it will fail configuring automounting.
 
+Required arguments: volume_group_id
+
 Arguments:
 
       -m MOUNT_POINT, --mount-point MOUNT_POINT
@@ -218,9 +222,13 @@ Arguments:
 ----
 
 ## Snapshots
-#### `ams snapshot create volume volume_group_id`
+#### `ams snapshot create volume (volume_group_id)`
 Create a snapshot of a specific volume_group_id.<br>
-PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before snapshotting and revert back to normal operation after snapshot has begun.
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a
+consistent state before snapshotting and revert back to normal operation after snapshot has begun.
+Description is written as metadata to the snapshot itself and will show up in the EC2 console.
+
+Required arguments: volume_group_id
 
 Arguments:
 
@@ -236,9 +244,11 @@ Arguments:
 
 #### `ams snapshot create host`
 Create a snapshot of a specific volume that is on a host<br>
-PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before snapshotting and revert back to normal operation after snapshot has begun.
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a
+consistent state before snapshotting and revert back to normal operation after snapshot has begun.<br>
+Description is written as metadata to the snapshot itself and will show up in the EC2 console.
 
-Required arguments: (host | instance), mount-point
+Required arguments: (--host | --instance), --mount-point
 
 Arguments:
 
@@ -265,7 +275,7 @@ If iops is provided then the volumes in the new volume group will be created wit
 group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
 pass in 0 for iops to explicitly disable.
 
-Required arguments: (zone | host | instance)
+Required arguments: snapshot_group_id, (--zone | --host | --instance)
 
 Arguments:
 
@@ -292,7 +302,7 @@ If iops is provided then the volumes in the new volume group will be created wit
 group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
 pass in 0 for iops to explicitly disable.
 
-Required arguments: (zone | host | instance)
+Required arguments: volume_group_id, (--zone | --host | --instance)
 
 Arguments:
 
@@ -319,7 +329,7 @@ If iops is provided then the volumes in the new volume group will be created wit
 group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
 pass in 0 for iops to explicitly disable.
 
-Required arguments: (zone | host | instance)
+Required arguments: hostname, src_mount_point, (--zone | --host | --instance)
 
 Arguments:
 
@@ -345,7 +355,7 @@ If iops is provided then the volumes in the new volume group will be created wit
 group for the snapshot will be used. To create the volumes in the new volume group with no iops when the original volume group had iops,
 pass in 0 for iops to explicitly disable.
 
-Required arguments: (zone | host | instance)
+Required arguments: instance_id, src_mount_point, (--zone | --host | --instance)
 
 Arguments:
 
@@ -364,11 +374,241 @@ Arguments:
 
 ----
 
-#### `ams snapshot schedule`
+#### `ams snapshot schedule list [resource] [resource_id]`
+Lists the snapshot schedules based on a specific resource id. `resource` is one of the literals `host`, `instance`, `volume`
+and `resource_id` is either hostname, instance_id, or volume_group_d respectively.<br>
+If no arguments are provided, then it will list all snapshot schedules
+
+
+Arguments:
+
+      --like LIKE           search string to use when listing resources
+      --prefix PREFIX       search string prefix to use when listing resources
+
+----
+
+#### `ams snapshot schedule add host (hostname)`
+Schedule snapshots for a host + mount point. This is the most flexible of the snapshot scheduling methods as it will resolve
+the host and mount point to do snapshots and will not be affected if the instance or the volume group are changed on a host.<br>
+Interval settings affect how often a snapshot is performed/retained. eg. 2 for hourly will take an "hourly" snapshot every other hour,
+2 for daily will take a "daily" snapshot every other day.<br>
+Retain settings affect how many of each type of snapshot to keep. eg. 24 for hours will keep the last 24 "hourly" snapshots
+(not necessarily the last 24 hours if "hourly" interval is not 1). Setting the retain value for any of the types to 0 disables that one.<br>
+If `--intervals` or `--retentions` are set, they will override the single `int_*` and `ret_*` arguments<br>
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before
+snapshotting and revert back to normal operation after snapshot has begun.<br>
+Description is written as metadata to the snapshot itself and will show up in the EC2 console.
+
+Required arguments: hostname, --mount-point
+
+Defaults:
+* int_hour  `1`
+* int_day   `1`
+* int_week  `1`
+* int_month `1`
+* ret_hour  `24`
+* ret_day   `14`
+* ret_week  `4`
+* ret_month `12`
+* ret_year  `3`
+
+Arguments:
+
+      -i HOUR DAY WEEK MONTH, --intervals HOUR DAY WEEK MONTH
+                            Set all intervals at once
+      -r HOURS DAYS WEEKS MONTHS YEARS, --retentions HOURS DAYS WEEKS MONTHS YEARS
+                            Set all retentions at once
+      --int_hour HOURS      hourly interval for snapshots
+      --int_day DAYS        daily interval for snapshots
+      --int_week WEEKS      weekly interval for snapshots
+      --int_month MONTHS    monthly interval for snapshots
+      --ret_hour HOURS      number of hourly snapshots to keep
+      --ret_day DAYS        number of daily snapshots to keep
+      --ret_week WEEKS      number of weekly snapshots to keep
+      --ret_month MONTHS    number of monthly snapshots to keep
+      --ret_year YEARS      number of yearly snapshots to keep
+      --pre PRE_COMMAND     command to run on host to prepare for starting EBS
+                            snapshot (will not be run if volume group is not
+                            attached)
+      --post POST_COMMAND   command to run on host after snapshot (will not be run
+                            if volume group is not attached)
+      -d DESCRIPTION, --description DESCRIPTION
+                            description to add to snapshot
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            mount point of the volume group to snapshot
 
 
 ----
 
+#### `ams snapshot schedule add instance (instance_id)`
+Schedule snapshots for an instance + mount point. This is more flexible than the volume group id based snapshot, but if the instance
+for a host is replaced, then the snapshot may not be able to run.<br>
+Interval settings affect how often a snapshot is performed/retained. eg. 2 for hourly will take an "hourly" snapshot every other hour,
+2 for daily will take a "daily" snapshot every other day.<br>
+Retain settings affect how many of each type of snapshot to keep. eg. 24 for hours will keep the last 24 "hourly" snapshots
+(not necessarily the last 24 hours if "hourly" interval is not 1). Setting the retain value for any of the types to 0 disables that one.<br>
+If `--intervals` or `--retentions` are set, they will override the single `int_*` and `ret_*` arguments<br>
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before
+snapshotting and revert back to normal operation after snapshot has begun.<br>
+Description is written as metadata to the snapshot itself and will show up in the EC2 console.
+
+Required arguments: instance_id, --mount-point
+
+Defaults:
+* int_hour  `1`
+* int_day   `1`
+* int_week  `1`
+* int_month `1`
+* ret_hour  `24`
+* ret_day   `14`
+* ret_week  `4`
+* ret_month `12`
+* ret_year  `3`
+
+Arguments:
+
+      -i HOUR DAY WEEK MONTH, --intervals HOUR DAY WEEK MONTH
+                            Set all intervals at once
+      -r HOURS DAYS WEEKS MONTHS YEARS, --retentions HOURS DAYS WEEKS MONTHS YEARS
+                            Set all retentions at once
+      --int_hour HOURS      hourly interval for snapshots
+      --int_day DAYS        daily interval for snapshots
+      --int_week WEEKS      weekly interval for snapshots
+      --int_month MONTHS    monthly interval for snapshots
+      --ret_hour HOURS      number of hourly snapshots to keep
+      --ret_day DAYS        number of daily snapshots to keep
+      --ret_week WEEKS      number of weekly snapshots to keep
+      --ret_month MONTHS    number of monthly snapshots to keep
+      --ret_year YEARS      number of yearly snapshots to keep
+      --pre PRE_COMMAND     command to run on host to prepare for starting EBS
+                            snapshot (will not be run if volume group is not
+                            attached)
+      --post POST_COMMAND   command to run on host after snapshot (will not be run
+                            if volume group is not attached)
+      -d DESCRIPTION, --description DESCRIPTION
+                            description to add to snapshot
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            mount point of the volume group to snapshot
+
+
+----
+
+#### `ams snapshot schedule add volume (volume_group_id)`
+Schedule snapshots for a specific volume_group_id. Least flexible of all the schedule creations, as it will only snapshot
+the volume group it is assigned to do. If the volume group is no longer in use, snapshots will continue to be created.<br>
+`int_*` settings affect how often a snapshot is performed/retained. eg. 2 for hourly will take an "hourly" snapshot every other hour,
+2 for daily will take a "daily" snapshot every other day.<br>
+`ret_*` settings affect how many of each type of snapshot to keep. eg. 24 for hours will keep the last 24 "hourly" snapshots
+(not necessarily the last 24 hours if "hourly" interval is not 1). Setting the retain value for any of the types to 0 disables that one.<br>
+If `--intervals` or `--retentions` are set, they will override the single `int_*` and `ret_*` arguments<br>
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before
+snapshotting and revert back to normal operation after snapshot has begun.<br>
+Description is written as metadata to the snapshot itself and will show up in the EC2 console.
+
+Required arguments: volume_group_id
+
+Defaults:
+* int_hour  `1`
+* int_day   `1`
+* int_week  `1`
+* int_month `1`
+* ret_hour  `24`
+* ret_day   `14`
+* ret_week  `4`
+* ret_month `12`
+* ret_year  `3`
+
+Arguments:
+
+      -i HOUR DAY WEEK MONTH, --intervals HOUR DAY WEEK MONTH
+                            Set all intervals at once
+      -r HOURS DAYS WEEKS MONTHS YEARS, --retentions HOURS DAYS WEEKS MONTHS YEARS
+                            Set all retentions at once
+      --int_hour HOURS      hourly interval for snapshots
+      --int_day DAYS        daily interval for snapshots
+      --int_week WEEKS      weekly interval for snapshots
+      --int_month MONTHS    monthly interval for snapshots
+      --ret_hour HOURS      number of hourly snapshots to keep
+      --ret_day DAYS        number of daily snapshots to keep
+      --ret_week WEEKS      number of weekly snapshots to keep
+      --ret_month MONTHS    number of monthly snapshots to keep
+      --ret_year YEARS      number of yearly snapshots to keep
+      --pre PRE_COMMAND     command to run on host to prepare for starting EBS
+                            snapshot (will not be run if volume group is not
+                            attached)
+      --post POST_COMMAND   command to run on host after snapshot (will not be run
+                            if volume group is not attached)
+      -d DESCRIPTION, --description DESCRIPTION
+                            description to add to snapshot
+
+----
+
+#### `ams snapshot schedule edit (schedule_id)`
+Edit an existing snapshot schedule by schedule_id.<br>
+`int_*` settings affect how often a snapshot is performed/retained. eg. 2 for hourly will take an "hourly" snapshot every other hour,
+2 for daily will take a "daily" snapshot every other day.<br>
+`ret_*` settings affect how many of each type of snapshot to keep. eg. 24 for hours will keep the last 24 "hourly" snapshots
+(not necessarily the last 24 hours if "hourly" interval is not 1). Setting the retain value for any of the types to 0 disables that one.<br>
+If `--intervals` or `--retentions` are set, they will override the single `int_*` and `ret_*` arguments as well as overwrite all the single
+settings in the database. If you only want to update a single setting, use the single versions of the arguments<br>
+PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a consistent state before
+snapshotting and revert back to normal operation after snapshot has begun.<br>
+Description is written as metadata to the snapshot itself and will show up in the EC2 console. Changing the description does not update the
+descriptions on snapshots that have already been created; it only changes the description for new snapshots going forward<br>
+At this time, changing a snapshot schedule from volume/host/instance type to any other type is not supported. Delete the current schedule
+and add a new one with different type but the same settings to achieve this functionality.
+
+
+Required arguments: schedule_id
+
+Arguments:
+
+      -i HOUR DAY WEEK MONTH, --intervals HOUR DAY WEEK MONTH
+                            Set all intervals at once
+      -r HOURS DAYS WEEKS MONTHS YEARS, --retentions HOURS DAYS WEEKS MONTHS YEARS
+                            Set all retentions at once
+      --int_hour HOURS      hourly interval for snapshots
+      --int_day DAYS        daily interval for snapshots
+      --int_week WEEKS      weekly interval for snapshots
+      --int_month MONTHS    monthly interval for snapshots
+      --ret_hour HOURS      number of hourly snapshots to keep
+      --ret_day DAYS        number of daily snapshots to keep
+      --ret_week WEEKS      number of weekly snapshots to keep
+      --ret_month MONTHS    number of monthly snapshots to keep
+      --ret_year YEARS      number of yearly snapshots to keep
+      --pre PRE_COMMAND     command to run on host to prepare for starting EBS
+                            snapshot (will not be run if volume group is not
+                            attached)
+      --post POST_COMMAND   command to run on host after snapshot (will not be run
+                            if volume group is not attached)
+      -d DESCRIPTION, --description DESCRIPTION
+                            description to add to snapshot
+
+
+----
+
+#### `ams snapshot schedule delete (schedule_id)`
+Deletes a specific snapshot schedule. Use `ams snapshot schedule list` to find `the schedule_id` of a specific schedule
+
+Required arguments: schedule_id
+
+----
+
+#### `ams snapshot schedule run [schedule_id]`
+This is intended to be dropped into a cron on a single host every hour with no arguments. <br>
+If a `schedule_id` is provided then the snapshot for the schedule points to will be created immediately regardless of whether it is scheduled (with a best
+effort to apply the retention rules so the snapshot will eventually be cleaned up). Take note that if a valid expiry time can be calculated the
+snapshot will be automatically purged per the rules of the schedule. If you want a snapshot that will not expire use `ams snapshot create` to create a snapshot
+
+----
+
 ## Internals
+#### `ams internals database install`
+This will install the database table for an initial install of AMS
 
+----
 
+#### `ams internals database install`
+This should be run every time that the software is updated to ensure that database schema matches the application's expectation
+
+----

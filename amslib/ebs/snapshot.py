@@ -459,23 +459,23 @@ class SnapshotManager(BaseManager):
             expiry_date = None
 
             # hourly snapshot
-            if t.hour % schedule[6] == 0:
+            if schedule[10] > 0 and t.hour % schedule[6] == 0:
                 expiry_date = t + datetime.timedelta(hours=schedule[6]*schedule[10])
 
             # daily snapshot
-            if t.hour == 0 and t.day % schedule[7] == 0:
+            if schedule[11] > 0 and t.hour == 0 and t.day % schedule[7] == 0:
                 expiry_date = t + datetime.timedelta(days=schedule[7]*schedule[11])
 
             # weekly snapshot
-            if t.hour == 0 and t.weekday() == 0 and t.isocalendar()[1] % schedule[8] == 0:
+            if schedule[12] > 0 and t.hour == 0 and t.weekday() == 0 and t.isocalendar()[1] % schedule[8] == 0:
                 expiry_date = t + datetime.timedelta(weeks=schedule[8]*schedule[12])
 
             # monthly snapshot
-            if t.hour == 0 and t.day == 1 and t.month % schedule[9] == 0:
+            if schedule[13] > 0 and t.hour == 0 and t.day == 1 and t.month % schedule[9] == 0:
                 expiry_date = t + datetime.timedelta(days=schedule[9]*schedule[13]*30)
 
             # yearly snapshot
-            if t.hour == 0 and t.day == 1 and t.month == 1:
+            if schedule[14] > 0 and t.hour == 0 and t.day == 1 and t.month == 1:
                 expiry_date = t + datetime.timedelta(days=schedule[14]*365)
 
             # if the snapshot should be done then an expiry_date should have been set, or if it was a manual snapshot then kick off the snapshot
@@ -609,7 +609,7 @@ class SnapshotManager(BaseManager):
         sscheduleeditparser.add_argument('schedule_id', type=int, help="Snapshot schedule_id to edit (use 'ams snapshot schedule list' to list available schedules)")
         sscheduleeditparser.set_defaults(func=self.command_snapshot_schedule_edit)
         # ams snapshot schedule delete
-        sscheduledelparser = sschedulesubparser.add_parser("delete", help="Delete a snapshot schedule", parents=[scheduleaddshared])
+        sscheduledelparser = sschedulesubparser.add_parser("delete", help="Delete a snapshot schedule",)
         sscheduledelparser.add_argument('schedule_id', type=int, help="Snapshot schedule_id to delete (use 'ams snapshot schedule list' to list available schedules)")
         sscheduledelparser.set_defaults(func=self.command_snapshot_schedule_delete)
         # ams snapshot schedule run
