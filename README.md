@@ -588,7 +588,7 @@ Arguments:
 ----
 
 #### `ams snapshot schedule delete (schedule_id)`
-Deletes a specific snapshot schedule. Use `ams snapshot schedule list` to find `the schedule_id` of a specific schedule
+Deletes a specific snapshot schedule. Use `ams snapshot schedule list` to find the `schedule_id` of a specific schedule
 
 Required arguments: schedule_id
 
