@@ -181,70 +181,76 @@ class VolumeManager(BaseManager):
         if not voldata:
             raise VolumeGroupNotFound("Metadata not found for volume_group_id: {0}".format(volume_group_id))
 
-        if voldata[0][3] != 'raid':
-            print "No raid to assemble for single volume"
-            return
-
         sh = SSHManager()
         sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
-        stdout, stderr, exit_code = sh.sudo('ls --color=never /dev/md[0-9]*', sudo_password=self.settings.SUDO_PASSWORD)
-        d = stdout.split(' ')
-        current_devices = []
-        for i in d:
-            if i: current_devices.append(str(i))
-
-        # find an available md* block device that we can use for the raid
-        md_id = 0
-        block_device = "/dev/md" + str(md_id)
-        while block_device in current_devices:
-            md_id += 1
-            block_device = "/dev/md" + str(md_id)
-
-        devcount = 0
-        devlist = ''
-        md_dev_pattern = ''
-        for row in voldata:
-            devcount += 1
-            devlist += row[5] + " "
-            # /dev/sd
-            md_dev_pattern = '([a-z]+{0}).*?'.format(row[5][6:]) + md_dev_pattern
-        md_dev_pattern = '(md[0-9]+).*?' + md_dev_pattern
         fs_type = voldata[0][2]
 
-        if new_raid:
-            raid_level = voldata[0][0]
-            stripe_block_size = voldata[0][1]
-            command = 'mdadm --create {0} --level={1} --chunk={2} --raid-devices={3} {4}'.format(block_device, raid_level, stripe_block_size, devcount, devlist)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
-            if int(exit_code) != 0:
-                raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
+        if voldata[0][3] == 'raid':
+            stdout, stderr, exit_code = sh.sudo('ls --color=never /dev/md[0-9]*', sudo_password=self.settings.SUDO_PASSWORD)
+            d = stdout.split(' ')
+            current_devices = []
+            for i in d:
+                if i: current_devices.append(str(i))
 
+            # find an available md* block device that we can use for the raid
+            md_id = 0
+            block_device = "/dev/md" + str(md_id)
+            while block_device in current_devices:
+                md_id += 1
+                block_device = "/dev/md" + str(md_id)
+
+            devcount = 0
+            devlist = ''
+            md_dev_pattern = ''
+            for row in voldata:
+                devcount += 1
+                devlist += row[5] + " "
+                # /dev/sd
+                md_dev_pattern = '([a-z]+{0}).*?'.format(row[5][6:]) + md_dev_pattern
+            md_dev_pattern = '(md[0-9]+).*?' + md_dev_pattern
+
+            if new_raid:
+                raid_level = voldata[0][0]
+                stripe_block_size = voldata[0][1]
+                command = 'mdadm --create {0} --level={1} --chunk={2} --raid-devices={3} {4}'.format(block_device, raid_level, stripe_block_size, devcount, devlist)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                if int(exit_code) != 0:
+                    raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
+
+                command = 'mkfs.{0} {1}'.format(fs_type, block_device)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                if int(exit_code) != 0:
+                    raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
+
+            else:
+                # find out if the raid was auto assembled as a new md device before trying to assemble it
+                stdout, stderr, exit_code = sh.sudo('cat /proc/mdstat', sudo_password=self.settings.SUDO_PASSWORD)
+                mdstat = stdout.split('\n')
+
+                dev_found = None
+                for line in mdstat:
+                    m = re.match(md_dev_pattern, line)
+                    if m:
+                        dev_found = m.group(1)
+
+                if dev_found:
+                    print "Waiting 10 seconds to allow raid device to get ready"
+                    time.sleep(10)
+                    block_device = '/dev/' + dev_found
+                else:
+                    command = 'mdadm --assemble {0} {1}'.format(block_device, devlist)
+                    stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                    if int(exit_code) != 0:
+                        raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
+
+        else:
+            block_device = voldata[0][5]
             command = 'mkfs.{0} {1}'.format(fs_type, block_device)
             stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:
                 raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
 
-        else:
-            # find out if the raid was auto assembled as a new md device before trying to assemble it
-            stdout, stderr, exit_code = sh.sudo('cat /proc/mdstat', sudo_password=self.settings.SUDO_PASSWORD)
-            mdstat = stdout.split('\n')
-
-            dev_found = None
-            for line in mdstat:
-                m = re.match(md_dev_pattern, line)
-                if m:
-                    dev_found = m.group(1)
-
-            if dev_found:
-                print "Waiting 10 seconds to allow raid device to get ready"
-                time.sleep(10)
-                block_device = '/dev/' + dev_found
-            else:
-                command = 'mdadm --assemble {0} {1}'.format(block_device, devlist)
-                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
-                if int(exit_code) != 0:
-                    raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
         #TODO add check in here to cat /proc/mdstat and make sure the expected raid is setup
 
