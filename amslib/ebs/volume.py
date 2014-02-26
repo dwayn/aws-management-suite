@@ -530,7 +530,8 @@ class VolumeManager(BaseManager):
                 "sum(size) as GiB, " \
                 "piops, " \
                 "h.instance_id, " \
-                "host " \
+                "h.host, " \
+                "hv.mount_point " \
                 "from " \
                 "volume_groups vg " \
                 "left join volumes v on v.volume_group_id=vg.volume_group_id " \
@@ -546,10 +547,10 @@ class VolumeManager(BaseManager):
 
         if self.settings.human_output:
             print "Volumes found:\n"
-            print "volume_group_id\tavailability_zone\tvolumes_in_group\traid_level\tGiB\tiops\tinstance_id\thostname"
+            print "volume_group_id\tavailability_zone\tvolumes_in_group\traid_level\tGiB\tiops\tinstance_id\thostname\tmount_point"
             print "--------------------------------------------------------------"
         for res in results:
-            print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7])
+            print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8])
         if self.settings.human_output:
             print "--------------------------------------------------------------"
 
