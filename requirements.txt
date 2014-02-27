@@ -2,3 +2,4 @@ ssh
 mysql-python
 boto
 argparse
+PrettyTable

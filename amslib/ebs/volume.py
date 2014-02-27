@@ -4,7 +4,7 @@ import types
 import datetime
 import re
 import os
-
+import prettytable
 import boto.ec2
 from amslib.core.manager import BaseManager
 from amslib.ssh.sshmanager import SSHManager
@@ -546,13 +546,16 @@ class VolumeManager(BaseManager):
         results = self.db.fetchall()
 
         if self.settings.human_output:
-            print "Volumes found:\n"
-            print "volume_group_id\tavailability_zone\tvolumes_in_group\traid_level\tGiB\tiops\tinstance_id\thostname\tmount_point"
-            print "--------------------------------------------------------------"
-        for res in results:
-            print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8])
-        if self.settings.human_output:
-            print "--------------------------------------------------------------"
+            print "\n\nVolume groups:"
+            table = prettytable.PrettyTable(["volume_group_id", "availability_zone", "volumes_in_group", "raid_level", "GiB", "iops", "instance_id", "hostname", "mount_point"])
+            table.align["volume_group_id"] = 'l'
+            for res in results:
+                table.add_row(res)
+            print table
+            print "\n\n"
+        else:
+            for res in results:
+                print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8])
 
 
     def command_volume_create(self, args):

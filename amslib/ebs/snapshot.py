@@ -10,7 +10,7 @@ from amslib.core.manager import BaseManager
 from volume import VolumeManager
 from amslib.ssh.sshmanager import SSHManager
 from errors import *
-
+import prettytable
 
 class SnapshotSchedule:
     def __init__(self):
@@ -758,13 +758,16 @@ class SnapshotManager(BaseManager):
         self.db.execute(sql)
         results = self.db.fetchall()
         if self.settings.human_output:
-            print "Snapshot Schedules:"
-            print "schedule_id\thostname\tinstance_id\tmount_point\tvolume_group_id\tintervals(h-d-w-m)\tretentions(h-d-w-m-y)\tpre_command\tpost_command\tdescription"
-            print "---------------------------------------------------------------------------------------------------------------------------------------------------"
-        for res in results:
-            print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9])
-        if self.settings.human_output:
-            print "---------------------------------------------------------------------------------------------------------------------------------------------------"
+            print "\n\nSnapshot Schedules:"
+            table = prettytable.PrettyTable(["schedule_id", "hostname", "instance_id", "mount_point", "volume_group_id", "intervals(h-d-w-m)", "retentions(h-d-w-m-y)", "pre_command", "post_command", "description"])
+            table.align["schedule_id"] = "l"
+            for res in results:
+                table.add_row(res)
+            print table
+            print "\n\n"
+        else:
+            for res in results:
+                print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9])
 
 
     def command_snapshot_schedule_add(self, args):

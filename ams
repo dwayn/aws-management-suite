@@ -7,6 +7,7 @@ import os
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.ebs.snapshot import SnapshotSchedule
+import prettytable
 # DO NOT CHANGE THIS VARIABLE
 DATABASE_VERSION = 4
 #############################
@@ -49,13 +50,15 @@ def host_list(args):
     results = db.fetchall()
 
     if settings.human_output:
-        print "Hosts found:\n"
-        print "Hostname\tinstance_id\tavailability_zone"
-        print "--------------------------------------------------------------"
-    for res in results:
-        print "{0}\t{1}\t{2}".format(res[0], res[1], res[2])
-    if settings.human_output:
-        print "--------------------------------------------------------------"
+        print "\n\nHosts:"
+        table = prettytable.PrettyTable(["Hostname", "instance_id", "availability_zone"])
+        for res in results:
+            table.add_row(res)
+        print table
+        print "\n\n"
+    else:
+        for res in results:
+            print "{0}\t{1}\t{2}".format(res[0], res[1], res[2])
 
 
 
