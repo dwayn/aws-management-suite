@@ -785,7 +785,7 @@ class SnapshotManager(BaseManager):
         ]
 
         if args.resource == 'host':
-            schedule.hostname = args.host
+            schedule.hostname = args.hostname
         if args.resource == 'instance':
             schedule.instance_id = args.instance_id
         if args.resource in ('host', 'instance'):
