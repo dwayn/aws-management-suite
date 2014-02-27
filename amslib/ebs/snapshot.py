@@ -534,7 +534,7 @@ class SnapshotManager(BaseManager):
         group = cloneargs.add_mutually_exclusive_group(required=True)
         group.add_argument("-z", "--zone", help="Availability zone to create the new volume group in")
         group.add_argument("-i", "--instance", help="instance id to attach the new volume group to")
-        group.add_argument("-H", "--host", help="hostname to attache the new volume group to")
+        group.add_argument("-H", "--host", help="hostname to attach the new volume group to")
         cloneargs.add_argument("-m", "--mount_point", help="directory to mount the new volume group to")
         cloneargs.add_argument("-a", "--no-automount", help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
         cloneargs.add_argument("-p", "--iops", type=int, help="Per EBS volume provisioned iops. Set to 0 to explicitly disable provisioned iops. If not provided then the iops of the original volumes will be used.")
@@ -660,7 +660,7 @@ class SnapshotManager(BaseManager):
                     return
                 snapshot_group_id = r[0]
             elif args.subtype == "host":
-                self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where host=%s and mount_point=%s", (args.host, args.src_mount_point))
+                self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where host=%s and mount_point=%s", (args.hostname, args.src_mount_point))
                 r = self.db.fetchone()
                 if not r:
                     print "Volume group not found for {0} on {1}".format(args.src_mount_point, args.host)
