@@ -8,7 +8,7 @@ from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.ebs.snapshot import SnapshotSchedule
 # DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 3
+DATABASE_VERSION = 4
 #############################
 
 

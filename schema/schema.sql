@@ -102,6 +102,7 @@ CREATE TABLE `snapshot_schedules` (
   `retain_yearly` int(11) NOT NULL DEFAULT '3',
   `pre_command` varchar(256) DEFAULT NULL,
   `post_command` varchar(256) DEFAULT NULL,
+  `description` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`schedule_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

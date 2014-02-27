@@ -1,0 +1,1 @@
+ALTER TABLE snapshot_schedules ADD COLUMN description varchar(255)/* apparently snapshot schedules didn't originally have description field */;
