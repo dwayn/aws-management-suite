@@ -553,12 +553,12 @@ class SnapshotManager(BaseManager):
         sclonelatestvolumeparser.add_argument('volume_group_id', type=int, help="ID of the volume group to clone")
         # ams snapshot clone latest host
         sclonelatesthostparser = sclonelatestsubparser.add_parser("host", help="Clone the latest snapshot for a host & mount point", parents=[cloneargs])
-        sclonelatesthostparser.add_argument('hostname', type=int, help="hostname with the volume group to clone")
-        sclonelatesthostparser.add_argument("src_mount_point", type=int, help="mount point of the volume group to clone")
+        sclonelatesthostparser.add_argument('hostname', help="hostname with the volume group to clone")
+        sclonelatesthostparser.add_argument("src_mount_point", help="mount point of the volume group to clone")
         # ams snapshot clone latest instance
         sclonelatestinstanceparser = sclonelatestsubparser.add_parser("instance", help="Clone the latest snapshot for an instance_id & mount point", parents=[cloneargs])
-        sclonelatestinstanceparser.add_argument('instance_id', type=int, help="instance_id of the host with the volume group to clone")
-        sclonelatestinstanceparser.add_argument("src_mount_point", type=int, help="mount point of the volume group to clone")
+        sclonelatestinstanceparser.add_argument('instance_id', help="instance_id of the host with the volume group to clone")
+        sclonelatestinstanceparser.add_argument("src_mount_point", help="mount point of the volume group to clone")
 
 
         # ams snapshot schedule
