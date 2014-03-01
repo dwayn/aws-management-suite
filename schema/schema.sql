@@ -33,6 +33,9 @@ CREATE TABLE `snapshot_groups` (
   `stripe_block_size` int(11) NOT NULL,
   `fs_type` varchar(30) NOT NULL,
   `block_device` varchar(30) DEFAULT NULL,
+  `orig_mount_point` varchar(50) DEFAULT NULL,
+  `orig_instance_id` varchar(15) DEFAULT NULL,
+  `orig_host` varchar(100) DEFAULT NULL,
   `group_type` enum('raid','single') DEFAULT NULL,
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`snapshot_group_id`)

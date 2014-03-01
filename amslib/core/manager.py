@@ -21,5 +21,5 @@ class BaseManager:
 
     # this must be implemented to build out the argument parser sub section for a particular module
     def argument_parser_builder(self, parser):
-        raise NotImplementedError("__argument_parser_builder not implemented")
+        raise NotImplementedError("argument_parser_builder not implemented")
 

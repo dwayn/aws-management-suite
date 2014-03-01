@@ -246,10 +246,11 @@ class VolumeManager(BaseManager):
 
         else:
             block_device = voldata[0][5]
-            command = 'mkfs.{0} {1}'.format(fs_type, block_device)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
-            if int(exit_code) != 0:
-                raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
+            if new_raid:
+                command = 'mkfs.{0} {1}'.format(fs_type, block_device)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                if int(exit_code) != 0:
+                    raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
 
 
         #TODO add check in here to cat /proc/mdstat and make sure the expected raid is setup
@@ -452,6 +453,17 @@ class VolumeManager(BaseManager):
         }
         return struct
 
+    def unmount_volume_group(self, volume_group_id):
+
+        pass
+
+    def detach_volume_group(self, volume_group_id, force=False):
+
+        pass
+
+    def delete_volume_group(self, volume_group_id):
+
+        pass
 
 
     def argument_parser_builder(self, parser):
@@ -493,7 +505,7 @@ class VolumeManager(BaseManager):
         vmountparser = vsubparser.add_parser("mount", help="Mount a volume group and configure auto mounting with /etc/fstab (and /etc/mdadm.conf if needed)")
         vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to mount")
         vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
-        vmountparser.add_argument('-a', '--no-automount', help="Disable configure the OS to automatically mount the volume group on reboot", action='store_true')
+        vmountparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
         vmountparser.set_defaults(func=self.command_volume_mount)
 
         vmountparser = vsubparser.add_parser("automount", help="Configure auto mounting of volume group with /etc/fstab (and /etc/mdadm.conf if needed)")
