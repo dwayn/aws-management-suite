@@ -225,6 +225,48 @@ Arguments:
 ----
 
 ## Snapshots
+#### `ams snapshot list volume (volume_group_id)`
+List the snapshots of a specific volume_group_id.<br>
+
+Required arguments: volume_group_id
+
+Arguments:
+
+      -r REGION, --region REGION
+                            Filter the snapshots by region
+
+----
+
+#### `ams snapshot list host [hostname]`
+List the snapshots for a specific host, or for hosts matching a search string. Optionally filter by mount point and/or region<br>
+
+Arguments:
+
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            Filter the snapshots by the mount point
+      -r REGION, --region REGION
+                            Filter the snapshots by region
+      --like LIKE           search string to use to filter hosts
+      --prefix PREFIX       search string prefix to filter hosts
+
+----
+
+#### `ams snapshot list instance [instance_id]`
+List the snapshots for a specific instance, or for instances matching a search string. Optionally filter by mount point and/or region<br>
+
+Required arguments: volume_group_id
+
+Arguments:
+
+      -m MOUNT_POINT, --mount-point MOUNT_POINT
+                            Filter the snapshots by the mount point
+      -r REGION, --region REGION
+                            Filter the snapshots by region
+      --like LIKE           search string to use to filter hosts
+      --prefix PREFIX       search string prefix to filter hosts
+
+----
+
 #### `ams snapshot create volume (volume_group_id)`
 Create a snapshot of a specific volume_group_id.<br>
 PRE and POST are commands that will be run before and after the snapshot, and provide a means to ensure that data is in a
