@@ -238,7 +238,7 @@ Arguments:
 ----
 
 #### `ams snapshot list host [hostname]`
-List the snapshots for a specific host, or for hosts matching a search string. Optionally filter by mount point and/or region<br>
+List the snapshots for a specific host, or for hosts matching a search string. Optionally filter by mount point and/or region.<br>
 
 Arguments:
 
@@ -252,7 +252,7 @@ Arguments:
 ----
 
 #### `ams snapshot list instance [instance_id]`
-List the snapshots for a specific instance, or for instances matching a search string. Optionally filter by mount point and/or region<br>
+List the snapshots for a specific instance, or for instances matching a search string. Optionally filter by mount point and/or region.<br>
 
 Required arguments: volume_group_id
 
