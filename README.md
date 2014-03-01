@@ -254,8 +254,6 @@ Arguments:
 #### `ams snapshot list instance [instance_id]`
 List the snapshots for a specific instance, or for instances matching a search string. Optionally filter by mount point and/or region.<br>
 
-Required arguments: volume_group_id
-
 Arguments:
 
       -m MOUNT_POINT, --mount-point MOUNT_POINT
