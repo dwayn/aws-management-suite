@@ -644,17 +644,17 @@ Required arguments: schedule_id
 This is intended to be dropped into a cron on a single host every hour with no arguments. <br>
 If a `schedule_id` is provided then the snapshot for the schedule points to will be created immediately regardless of whether it is scheduled (with a best
 effort to apply the retention rules so the snapshot will eventually be cleaned up). Take note that if a valid expiry time can be calculated the
-snapshot will be automatically purged per the rules of the schedule. If you want a snapshot that will not expire use `ams snapshot create` to create a snapshot
+snapshot will be automatically purged per the rules of the schedule. If you want a snapshot that will not expire use `ams snapshot create` to create a snapshot.
 
 ----
 
 ## Internals
 #### `ams internals database install`
-This will install the database table for an initial install of AMS
+This will install the database table for an initial install of AMS.
 
 ----
 
-#### `ams internals database install`
-This should be run every time that the software is updated to ensure that database schema matches the application's expectation
+#### `ams internals database upgrade`
+This should be run every time that the software is updated to ensure that database schema matches the application's expectation.
 
 ----
