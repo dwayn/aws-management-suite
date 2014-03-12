@@ -6,6 +6,7 @@ import re
 import os
 import prettytable
 import boto.ec2
+import argparse
 from amslib.core.manager import BaseManager
 from amslib.ssh.sshmanager import SSHManager
 from errors import *
@@ -470,6 +471,7 @@ class VolumeManager(BaseManager):
 
         vsubparser = parser.add_subparsers(title="action", dest='action')
 
+        # ams volume list
         vlistparser = vsubparser.add_parser("list")
         vlistparser.add_argument('search_field', nargs="?", help="field to search", choices=['host', 'instance_id'])
         vlistparser.add_argument('field_value', nargs="?", help="exact match search value")
@@ -478,6 +480,8 @@ class VolumeManager(BaseManager):
         vlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
         vlistparser.set_defaults(func=self.command_volume_list)
 
+
+        # ams volume create
         vcreateparser = vsubparser.add_parser("create", help="Create new volume group.")
         vcreategroup = vcreateparser.add_mutually_exclusive_group(required=True)
         vcreategroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
@@ -493,21 +497,54 @@ class VolumeManager(BaseManager):
         vcreateparser.add_argument('-p', '--iops', type=int, help="Per EBS volume provisioned iops")
         vcreateparser.set_defaults(func=self.command_volume_create)
 
-        vcreateparser = vsubparser.add_parser("attach", help="Attach, assemble (if necessary) and mount(optional) a volume group")
-        vcreategroup = vcreateparser.add_mutually_exclusive_group(required=True)
-        vcreateparser.add_argument('volume_group_id', type=int, help="ID of the volume group to attach to instance")
-        vcreategroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
-        vcreategroup.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
-        vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
-        vcreateparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
-        vcreateparser.set_defaults(func=self.command_volume_attach)
 
+        # ams volume attach
+        vattachparser = vsubparser.add_parser("attach", help="Attach, assemble (if necessary) and mount(optional) a volume group")
+        vattachgroup = vattachparser.add_mutually_exclusive_group(required=True)
+        vattachparser.add_argument('volume_group_id', type=int, help="ID of the volume group to attach to instance")
+        vattachgroup.add_argument('-i', '--instance', help="instance_id of an instance to attach new volume group")
+        vattachgroup.add_argument('-H', '--host', help="hostname of an instance to attach new volume group")
+        vattachparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
+        vattachparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
+        vattachparser.set_defaults(func=self.command_volume_attach)
+
+
+        # ams volume detach
+        vdetachparser = vsubparser.add_parser("detach", help="Detach a volume group from an instance")
+        vdetachparser.set_defaults(func=self.command_volume_detach)
+        detachdefaultsparser = argparse.ArgumentParser(add_help=False)
+        detachdefaultsparser.add_argument('-u', '--unmount', help="Unmounts the volume group if it is mounted. If this option is not included and the volume is mounted the detach operation will fail", action='store_true')
+        vdetachsubparser = vdetachparser.add_subparsers(title='type', dest='type')
+        # ams volume detach volume
+        vdetachvolumeparser = vdetachsubparser.add_parser("volume", help="Detach a volume_group_id from the instance that it is currently attached")
+        vdetachvolumeparser.add_argument('volume_group_id', type=int, help="ID of the volume group to detach")
+        # ams volume detach host
+        vdetachhostparser = vdetachsubparser.add_parser("host")
+        vdetachhostparser.add_argument("hostname", help="Hostname")
+        vdetachhostparser.add_argument("mount_point", help="Mount point of the volume to detach")
+        # ams volume detach instance
+        vdetachhostparser = vdetachsubparser.add_parser("instance")
+        vdetachhostparser.add_argument("instance_id", help="Instance ID")
+        vdetachhostparser.add_argument("mount_point", help="Mount point of the volume to detach")
+
+
+        # ams volume mount
         vmountparser = vsubparser.add_parser("mount", help="Mount a volume group and configure auto mounting with /etc/fstab (and /etc/mdadm.conf if needed)")
         vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to mount")
         vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
         vmountparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
         vmountparser.set_defaults(func=self.command_volume_mount)
 
+
+        # ams volume unmount
+        vumountparser = vsubparser.add_parser("unmount", help="Unmount a volume group")
+        vumountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to mount")
+        #TODO add support for host/mount_point unmounting for better UI
+        #vumountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
+        vumountparser.set_defaults(func=self.command_volume_unmount)
+
+
+        # ams volume automount
         vmountparser = vsubparser.add_parser("automount", help="Configure auto mounting of volume group with /etc/fstab (and /etc/mdadm.conf if needed)")
         vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to configure automount for")
         vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
@@ -589,8 +626,15 @@ class VolumeManager(BaseManager):
     def command_volume_attach(self, args):
         print "volume attach function"
 
+    def command_volume_detach(self, args):
+        print "volume attach function"
+
     def command_volume_automount(self, args):
         self.configure_volume_automount(args.volume_group_id, args.mount_point)
 
     def command_volume_mount(self, args):
         print "volume mount function"
+
+    def command_volume_unmount(self, args):
+        print "volume mount function"
+
