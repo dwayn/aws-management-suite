@@ -538,7 +538,7 @@ class VolumeManager(BaseManager):
 
         # ams volume unmount
         vumountparser = vsubparser.add_parser("unmount", help="Unmount a volume group")
-        vumountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to mount")
+        vumountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to unmount")
         #TODO add support for host/mount_point unmounting for better UI
         #vumountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
         vumountparser.set_defaults(func=self.command_volume_unmount)
@@ -549,6 +549,12 @@ class VolumeManager(BaseManager):
         vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to configure automount for")
         vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
         vmountparser.set_defaults(func=self.command_volume_automount)
+
+
+        # ams volume delete
+        vdeleteparser = vsubparser.add_parser("delete", help="Delete a volume group")
+        vdeleteparser.add_argument('volume_group_id', type=int, help="ID of the volume group to delete")
+        vdeleteparser.set_defaults(func=self.command_volume_delete)
 
         return parser
 
@@ -636,5 +642,8 @@ class VolumeManager(BaseManager):
         print "volume mount function"
 
     def command_volume_unmount(self, args):
+        print "volume mount function"
+
+    def command_volume_delete(self, args):
         print "volume mount function"
 
