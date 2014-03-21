@@ -99,8 +99,7 @@ Arguments:
 ----
 
 #### `ams host add`
-Add a host to the hosts table so that resources on the host can be managed. This is a temporary feature that will be
-replaced with better functionality in the future.
+Add a host to the hosts table so that resources on the host can be managed. This has effectively been replaced by the host discovery functionality.
 
 Required arguments: --instance, --host, --zone
 
@@ -125,6 +124,44 @@ Arguments:
                             Instance type (stored but not currently used)
       --notes NOTES         Notes on the instance/host (stored but not currently
                             used)
+      -z ZONE, --zone ZONE  availability zone that the instance is in
+
+----
+
+#### `ams host edit`
+Edit a host's details in the database, particularly useful for editing the hostname which does not get overwritten on discovery passes.
+
+Required arguments: --instance
+
+Arguments:
+
+      -i INSTANCE, --instance INSTANCE
+                            Instance ID of the instance to add
+      -H HOSTNAME, --hostname HOSTNAME
+                            hostname of the host (used to ssh to the host to do
+                            management)
+      -z ZONE, --zone ZONE  availability zone that the instance is in
+      --hostname-internal HOSTNAME_INTERNAL
+                            internal hostname (stored but not currently used)
+      --hostname-external HOSTNAME_EXTERNAL
+                            external hostname (stored but not currently used)
+      --ip-internal IP_INTERNAL
+                            internal IP address (stored but not currently used)
+      --ip-external IP_EXTERNAL
+                            external IP address (stored but not currently used)
+      --ami-id AMI_ID       AMI ID (stored but not currently used)
+      --instance-type INSTANCE_TYPE
+                            Instance type (stored but not currently used)
+      --notes NOTES         Notes on the instance/host (stored but not currently
+                            used)
+      -z ZONE, --zone ZONE  availability zone that the instance is in
+
+----
+
+#### `ams host discovery`
+Runs host discovery to populate the hosts table automatically
+
+Arguments: None
 
 ----
 

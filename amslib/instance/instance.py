@@ -36,12 +36,22 @@ class InstanceManager(BaseManager):
                 name = None
                 if 'Name' in i.tags:
                     name = i.tags['Name']
+                hint = None
+                hext = None
+                hn = None
+                if i.private_dns_name:
+                    hint = i.private_dns_name
+                if i.public_dns_name:
+                    hext = i.public_dns_name
+                if i.dns_name:
+                    hn = i.dns_name
+
                 self.db.execute("insert into hosts set instance_id=%s, host=%s, hostname_internal=%s, hostname_external=%s, "
                                 "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s on duplicate "
                                 "key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
-                                "instance_type=%s, availability_zone=%s, name=%s", (i.id, i.dns_name, i.private_dns_name, i.public_dns_name,
+                                "instance_type=%s, availability_zone=%s, name=%s", (i.id, hn, hint, hext,
                                                                             i.private_ip_address, i.ip_address, i.image_id, i.instance_type,
-                                                                            i.placement, name, i.private_dns_name, i.public_dns_name, i.private_ip_address,
+                                                                            i.placement, name, hint, hext, i.private_ip_address,
                                                                             i.ip_address, i.image_id, i.instance_type, i.placement, name))
                 self.dbconn.commit()
         pass
@@ -59,19 +69,28 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
         hlistparser.set_defaults(func=self.command_host_list)
 
+        addeditargs = argparse.ArgumentParser(add_help=False)
+        addeditargs.add_argument('-i', '--instance', help="Instance ID of the instance to add", required=True)
+        addeditargs.add_argument('--hostname-internal', help="internal hostname (stored but not currently used)")
+        addeditargs.add_argument('--hostname-external', help="external hostname (stored but not currently used)")
+        addeditargs.add_argument('--ip-internal', help="internal IP address (stored but not currently used)")
+        addeditargs.add_argument('--ip-external', help="external IP address (stored but not currently used)")
+        addeditargs.add_argument('--ami-id', help="AMI ID (stored but not currently used)")
+        addeditargs.add_argument('--instance-type', help="Instance type (stored but not currently used)")
+        addeditargs.add_argument('--notes', help="Notes on the instance/host (stored but not currently used)")
+        addeditargs.add_argument('--name', help="Name of the host (should match the 'Name' tag in EC2 for the instance)")
+
         # ams host add
-        haddparser = hsubparser.add_parser("add", help="Add host to the database to be managed")
-        haddparser.add_argument('-i', '--instance', help="Instance ID of the instance to add", required=True)
+        haddparser = hsubparser.add_parser("add", help="Add host to the database to be managed", parents=[addeditargs])
         haddparser.add_argument('-H', '--hostname', help="hostname of the host (used to ssh to the host to do management)", required=True)
         haddparser.add_argument('-z', '--zone', help="availability zone that the instance is in", required=True)
-        haddparser.add_argument('--hostname-internal', help="internal hostname (stored but not currently used)")
-        haddparser.add_argument('--hostname-external', help="external hostname (stored but not currently used)")
-        haddparser.add_argument('--ip-internal', help="internal IP address (stored but not currently used)")
-        haddparser.add_argument('--ip-external', help="external IP address (stored but not currently used)")
-        haddparser.add_argument('--ami-id', help="AMI ID (stored but not currently used)")
-        haddparser.add_argument('--instance-type', help="Instance type (stored but not currently used)")
-        haddparser.add_argument('--notes', help="Notes on the instance/host (stored but not currently used)")
         haddparser.set_defaults(func=self.command_host_add)
+
+        # ams host edit
+        heditparser = hsubparser.add_parser("edit", help="Edit host details in the database. Values can be passed as an empty string ('') to nullify them", parents=[addeditargs])
+        heditparser.add_argument('-H', '--hostname', help="hostname of the host (used to ssh to the host to do management)")
+        heditparser.add_argument('-z', '--zone', help="availability zone that the instance is in")
+        heditparser.set_defaults(func=self.command_host_edit)
 
         discparser = hsubparser.add_parser("discovery", help="Run discovery on hosts/instances to populate database with resources")
         discparser.set_defaults(func=self.command_discover)
@@ -116,7 +135,7 @@ class InstanceManager(BaseManager):
 
     def command_host_add(self, args):
         self.db.execute("insert into hosts(`instance_id`, `host`, `availability_zone`, `hostname_internal`, `hostname_external`, `ip_internal`, "
-                   "`ip_external`, `ami_id`, `instance_type`, `notes`) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (args.instance,
+                   "`ip_external`, `ami_id`, `instance_type`, `notes`, `name`) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (args.instance,
                                                                                                          args.hostname,
                                                                                                          args.zone,
                                                                                                          args.hostname_internal,
@@ -125,6 +144,37 @@ class InstanceManager(BaseManager):
                                                                                                          args.ip_external,
                                                                                                          args.ami_id,
                                                                                                          args.instance_type,
-                                                                                                         args.notes))
+                                                                                                         args.notes,
+                                                                                                         args.name))
         self.dbconn.commit()
         print "Added instance {0}({1}) to list of managed hosts".format(args.hostname, args.instance)
+
+    def command_host_edit(self, args):
+        fields = ['hostname_internal', 'hostname_external', 'ip_internal', 'ip_external', 'ami_id', 'instance_type', 'notes', 'name']
+        updates = []
+        vars = []
+        if args.hostname:
+            updates.append("host=%s")
+            vars.append(args.hostname)
+        if args.hostname == "":
+            updates.append("host=NULL")
+        if args.zone:
+            updates.append("availability_zone=%s")
+            vars.append(args.zone)
+
+        for f in fields:
+            val = getattr(args, f)
+            if val:
+                updates.append("{0}=%s".format(f))
+                vars.append(val)
+            if val == "":
+                updates.append("{0}=NULL".format(f))
+        if len(updates) == 0:
+            print "Nothing to update"
+            return
+
+        vars.append(args.instance)
+        self.db.execute("update hosts set " + ", ".join(updates) + " where instance_id=%s", vars)
+        self.dbconn.commit()
+        print "Instance {0} updated"
+
