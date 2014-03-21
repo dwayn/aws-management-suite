@@ -133,6 +133,32 @@ class SnapshotManager(BaseManager):
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr))
 
+    def delete_snapshot_group(self, snapshot_group_id):
+        self.db.execute("select region, snapshot_id from snapshot_groups sg join snapshots s using(snapshot_group_id) where snapshot_group_id=%s", (snapshot_group_id, ))
+        sdata = self.db.fetchall()
+        if not sdata:
+            raise SnapshotNotFound("Snapshot group {0} not found".format(snapshot_group_id))
+
+        region = sdata[0][0]
+        snapids = []
+        for s in sdata:
+            snapids.append(s[1])
+
+        botoconn = self.__get_boto_conn(region)
+        snaps = botoconn.get_all_snapshots(snapids)
+
+        for snap in snaps:
+            sid = snap.id
+            snap.delete()
+            self.db.execute("insert into deleted_snapshots select * from snapshots where snapshot_id=%s", (sid, ))
+            self.db.execute("delete from snapshots where snapshot_id=%s", (sid, ))
+            self.dbconn.commit()
+        self.db.execute("insert into deleted_snapshot_groups select * from snapshot_groups where snapshot_group_id=%s",(snapshot_group_id, ))
+        self.db.execute("delete from snapshot_groups where snapshot_group_id=%s",(snapshot_group_id, ))
+        self.dbconn.commit()
+        print "Deleted snapshot group {0}".format(snapshot_group_id)
+
+
     # copy an entire snapshot group to a region
     def copy_snapshot_group(self, snapshot_group_id, region):
         botoconn = self.__get_boto_conn(region)
@@ -530,6 +556,16 @@ class SnapshotManager(BaseManager):
         screatehostparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
         screatehostparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
         screatehostparser.set_defaults(func=self.command_snapshot_create_host)
+
+        # ams snapshot delete
+        sdeleteparser = ssubparser.add_parser("delete", help="Delete snapshots")
+        sdeleteparser.set_defaults(func=self.command_snapshot_delete)
+        sdeletesubparser = sdeleteparser.add_subparsers(title="type", dest='type')
+        # ams snapshot delete expired
+        sdeletesubparser.add_parser("expired", help="Delete expired snapshots")
+        # ams snapshot delete snapshot
+        sdeletesnapparser = sdeletesubparser.add_parser("snapshot", help="Delete a snapshot_group_id")
+        sdeletesnapparser.add_argument("snapshot_group_id", type=int, help="ID of the snapshot group to delete")
 
 
         # ams snapshot list
@@ -967,4 +1003,17 @@ class SnapshotManager(BaseManager):
 
     def command_snapshot_schedule_run(self, args):
         self.run_snapshot_schedule(args.schedule_id)
+
+    def command_snapshot_delete(self, args):
+        if args.type == 'expired':
+            self.db.execute("select snapshot_group_id from snapshot_groups join snapshots using(snapshot_group_id) where expiry_date < now() group by snapshot_group_id")
+            rows = self.db.fetchall()
+            if not rows:
+                print "No expired snapshots to delete"
+                return
+            for row in rows:
+                self.delete_snapshot_group(row[0])
+
+        elif args.type == 'snapshot':
+            self.delete_snapshot_group(args.snapshot_group_id)
 
