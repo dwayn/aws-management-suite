@@ -10,7 +10,7 @@ from amslib.ebs.snapshot import SnapshotSchedule
 from amslib.instance.instance import InstanceManager
 import prettytable
 # DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 7
+DATABASE_VERSION = 8
 #############################
 
 

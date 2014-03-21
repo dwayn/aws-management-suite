@@ -1,0 +1,1 @@
+ALTER TABLE hosts ADD COLUMN name VARCHAR(255) DEFAULT NULL /* Adding name column to the hosts table so that mapping between AMS and EC2 console is more opvious */;
