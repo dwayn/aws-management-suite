@@ -16,12 +16,13 @@ SSH client
 * captures stdout, stderr and exit code from command run
 
 EBS Volumes (managed as groups of volumes)
-* create volume group
-* delete volume group
-* attach volume group
-* detach volume group
-* create software raid
-* assemble software raid
+* create volume/raid
+* delete volume/raid
+* attach volume/raid
+* detach volume/raid
+* create software raid volume
+* partition and format new volumes/raids
+* (re)assemble software raid from existing (or newly cloned) ebs volumes
 * mount volume/raid
 * unmount volume/raid
 
@@ -31,9 +32,13 @@ EBS Snapshots (managed as groups of snapshots)
 * copy snapshot group to another region (only handled internally currently)
 * clone snapshot group to new volume group and optionally attach/mount on a host
 * clone latest snapshot of a volume group or host/instance + mount point
+* schedule regular snapshots of volume/raid with managed grandfather/father/son expiration
+* automatable purging of expired snapshots
+
 
 Instance Management
-* Currently instances need to be added to the managed hosts list manually via `ams host add`, future feature is planned for automatic audit and discovery of cloud resources
+* Instances can be manually added or edited using `ams host add` or `ams host edit` respectively
+* Instance discovery has been implemented, allowing the hosts table to be automatically populated
 
 ## Setup and Configuration
 ### Initial installation
