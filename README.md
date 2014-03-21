@@ -175,6 +175,14 @@ Arguments:
 
 ----
 
+#### `ams volume delete (volume_group_id)`
+Deletes provided volume_group_id. Volume group must not be currently attached to an instance.
+
+Required arguments: volume_group_id
+
+
+----
+
 #### `ams volume attach (volume_group_id)`
 Attaches provided volume_group_id to a host. Optionally mounts the volume and configures automounting.
 
@@ -198,6 +206,51 @@ Arguments:
 
 ----
 
+#### `ams volume detach volume (volume_group_id)`
+Detaches provided volume_group_id from the host it is currently attached. Removes the automounting configuration for the volume group.
+
+Required arguments: volume_group_id
+
+Arguments:
+
+      -u, --unmount         Unmounts the volume group if it is mounted. If this
+                            option is not included and the volume is mounted the
+                            detach operation will fail
+      -f FORCE, --force FORCE
+                            Force detach the volume group's EBS volumes
+
+----
+
+#### `ams volume detach host (hostname) (mount_point)`
+Detaches provided volume group that is mounted at `mount_point` on `hostname`. Removes the automounting configuration for the volume group.
+
+Required arguments: hostname, mount_point
+
+Arguments:
+
+      -u, --unmount         Unmounts the volume group if it is mounted. If this
+                            option is not included and the volume is mounted the
+                            detach operation will fail
+      -f FORCE, --force FORCE
+                            Force detach the volume group's EBS volumes
+
+----
+
+#### `ams volume detach instance (instance_id) (mount_point)`
+Detaches provided volume group that is mounted at `mount_point` on `instance_id`. Removes the automounting configuration for the volume group.
+
+Required arguments: instance_id, mount_point
+
+Arguments:
+
+      -u, --unmount         Unmounts the volume group if it is mounted. If this
+                            option is not included and the volume is mounted the
+                            detach operation will fail
+      -f FORCE, --force FORCE
+                            Force detach the volume group's EBS volumes
+
+----
+
 #### `ams volume mount (volume_group_id)`
 Mount a volume group on the host that it is currently attached. Supports mounting to a given mount point or the currently defined mount point for the volume group.
 
@@ -213,6 +266,15 @@ Arguments:
 
 ----
 
+#### `ams volume unmount (volume_group_id)`
+Unmount volume_group_id on the host that it is currently mounted. Does not make any changes to currently automount configuration.
+
+Required arguments: volume_group_id
+
+
+
+----
+
 #### `ams volume automount (volume_group_id)`
 Configure automounting for the volume_group_id. If mount point is not provided then it will use the currently defined mount point for the volume.
 If neither of these exist then it will configure automounting of the volume where it is currently mounted, otherwise it will fail configuring automounting.
@@ -224,6 +286,8 @@ Arguments:
       -m MOUNT_POINT, --mount-point MOUNT_POINT
                             Set the mount point for volume. If not provided, will
                             attempt to use currently defined mount point
+      -r, --remove          Remove the current automount configuration for a
+                            volume group
 
 ----
 

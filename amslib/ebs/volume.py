@@ -741,6 +741,7 @@ class VolumeManager(BaseManager):
         vmountparser = vsubparser.add_parser("automount", help="Configure auto mounting of volume group with /etc/fstab (and /etc/mdadm.conf if needed)")
         vmountparser.add_argument('volume_group_id', type=int, help="ID of the volume group to configure automount for")
         vmountparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. If not provided, will attempt to use currently defined mount point")
+        vmountparser.add_argument('-r', '--remove', help="Remove the current automount configuration for a volume group", action='store_true')
         vmountparser.set_defaults(func=self.command_volume_automount)
 
 
@@ -874,7 +875,7 @@ class VolumeManager(BaseManager):
 
 
     def command_volume_automount(self, args):
-        self.configure_volume_automount(args.volume_group_id, args.mount_point)
+        self.configure_volume_automount(args.volume_group_id, args.mount_point, args.remove)
 
     def command_volume_mount(self, args):
         self.db.execute("select instance_id from host_volumes where volume_group_id=%s", (args.volume_group_id, ))
