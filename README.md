@@ -411,6 +411,22 @@ Arguments:
 
 ----
 
+#### `ams snapshot delete expired`
+Delete all expired snapshots. This operation is intended to be able to be added to crontab for regular purging of expired snapshots
+
+Required arguments: None
+
+Arguments: None
+
+----
+
+#### `ams snapshot delete snapshot (snapshot_group_id)`
+Delete a specific snapshot_group_id. Use one of the snapshot list commands to find a snapshot_group_id.
+
+Required arguments: snapshot_group_id
+
+----
+
 #### `ams snapshot clone snapshot (snapshot_group_id)`
 Clone a specific snapshot_group_id into a new volume group and optionally attach and mount the new volume.<br>
 This will manage copying snapshot to destination region if the destination region is not the same as where the snapshot group is held.<br>
