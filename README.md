@@ -16,20 +16,24 @@ SSH client
 * captures stdout, stderr and exit code from command run
 
 EBS Volumes (managed as groups of volumes)
-* create volumes
-* attach volumes
+* create volume group
+* delete volume group
+* attach volume group
+* detach volume group
 * create software raid
 * assemble software raid
 * mount volume/raid
+* unmount volume/raid
+
 
 EBS Snapshots (managed as groups of snapshots)
 * pre/post snapshot hooks to enable running commands/scripts on target host before and after starting snapshot to ensure consistent point in time snapshot of all volumes in a raid group
-* copy snapshot group
-* clone snapshot group to new volume group
+* copy snapshot group to another region (only handled internally currently)
+* clone snapshot group to new volume group and optionally attach/mount on a host
 * clone latest snapshot of a volume group or host/instance + mount point
 
 Instance Management
-* Currently instances need to be added to the hosts table manually, there is a feature planned to add a discovery script so that many of these things can be automatically populated
+* Currently instances need to be added to the managed hosts list manually via `ams host add`, future feature is planned for automatic audit and discovery of cloud resources
 
 ## Setup and Configuration
 ### Initial installation
@@ -91,6 +95,36 @@ Arguments:
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
+
+----
+
+#### `ams host add`
+Add a host to the hosts table so that resources on the host can be managed. This is a temporary feature that will be
+replaced with better functionality in the future.
+
+Required arguments: --instance, --host, --zone
+
+Arguments:
+
+      -i INSTANCE, --instance INSTANCE
+                            Instance ID of the instance to add
+      -H HOSTNAME, --hostname HOSTNAME
+                            hostname of the host (used to ssh to the host to do
+                            management)
+      -z ZONE, --zone ZONE  availability zone that the instance is in
+      --hostname-internal HOSTNAME_INTERNAL
+                            internal hostname (stored but not currently used)
+      --hostname-external HOSTNAME_EXTERNAL
+                            external hostname (stored but not currently used)
+      --ip-internal IP_INTERNAL
+                            internal IP address (stored but not currently used)
+      --ip-external IP_EXTERNAL
+                            external IP address (stored but not currently used)
+      --ami-id AMI_ID       AMI ID (stored but not currently used)
+      --instance-type INSTANCE_TYPE
+                            Instance type (stored but not currently used)
+      --notes NOTES         Notes on the instance/host (stored but not currently
+                            used)
 
 ----
 
