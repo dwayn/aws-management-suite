@@ -3,3 +3,4 @@ mysql-python
 boto
 argparse
 PrettyTable
+argcomplete

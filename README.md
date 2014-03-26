@@ -51,6 +51,14 @@ Instance Management
 * Suggested: add the path to ams directory to your path or add symlink to `ams` script to a directory in the system path
 * `ams internals database install` will create the current full version of all of the tables
 
+### Enabling bash/zsh completion
+This project makes use of the argcomplete library (https://github.com/kislyuk/argcomplete) to provide dynamic completion. As part of the pip installation,
+the library will be installed, but completion will still need to be enabled. Due to some multi-platform issues I experienced trying to enable global completeion,
+I opted to use specific completion. All that is needed is to add this line to your .bashrc, .profile or .bash_profile (depending on which your OS uses) and then reload
+your terminal or `source .bashrc` (or .profile or .bash_profile).
+
+`eval "$(register-python-argcomplete ams)"`
+
 ### Upgrading
 If you have updated the code base, just run `ams internals database upgrade` to run the update scripts. Upgrade can be run as often as you like, as it will do nothing if the database version matches the code version.
 

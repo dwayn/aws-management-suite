@@ -1,12 +1,13 @@
 #!/usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
 import argparse
+import argcomplete
 import MySQLdb
 import settings
 import inspect
 import os
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
-from amslib.ebs.snapshot import SnapshotSchedule
 from amslib.instance.instance import InstanceManager
 import prettytable
 # DO NOT CHANGE THIS VARIABLE
@@ -25,8 +26,6 @@ settings.human_output = True
 vm = VolumeManager(settings)
 snapmanager = SnapshotManager(settings)
 im = InstanceManager(settings)
-
-
 
 
 def install_db(args):
@@ -97,7 +96,7 @@ def main():
     p = dbsubparser.add_parser("upgrade", help="Upgrade the database to the current version for AMS")
     p.set_defaults(func=upgrade_db)
 
-
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     # print args
