@@ -52,9 +52,13 @@ class SSHManager:
         return self.__runcommand(channel=self.__sudo_channel, command=command, marker_script='/tmp/ams_sudo_end_marker')
 
     def __create_end_marker_script(self, channel, filename):
-        channel.send("echo '#!/bin/bash\necho {0}' > {1}\n chmod +x {2}\n".format(self.__finish_marker, filename, filename))
+        channel.send("echo '#!/bin/bash\necho {0}' > {1}\n chmod +x {1}\n{1}\n".format(self.__finish_marker, filename))
         time.sleep(0.1)
+        res = ''
         while not channel.recv_ready():
+            time.sleep(0.05)
+        while channel.recv_ready() or res.count(self.__finish_marker) < 2:
+            res += channel.recv(1024)
             time.sleep(0.05)
         self.__flush_output_buffer(channel)
 

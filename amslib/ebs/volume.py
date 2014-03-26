@@ -304,7 +304,7 @@ class VolumeManager(BaseManager):
         command = "mkdir -p {0}".format(mount_point)
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
-            raise VolumeMountError("Unable to create mount directory: {0}".format(mount_point))
+            raise VolumeMountError("Unable to create mount directory: {0} with error: {1}".format(mount_point, stderr))
         command = 'mount {0} {1} -o {2} -t {3}'.format(block_device, mount_point, mount_options, fs_type)
         stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
         if int(exit_code) != 0:
