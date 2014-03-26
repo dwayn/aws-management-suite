@@ -12,6 +12,7 @@ class SSHManager:
         self.__stderr_fname = "/tmp/ams_err_{0}".format(uuid.uuid4())
         self.__exit_code_fname = "/tmp/ams_xc_{0}".format(str(uuid.uuid4()))
         self.__marker = str(uuid.uuid4())
+        self.__finish_marker = str(uuid.uuid4())
         self.__command_append = " 2> {0}  #---start_output-{1}--\necho $? > {2}\n".format(self.__stderr_fname, self.__marker, self.__exit_code_fname)
         self.__run_channel = None
         self.__sudo_channel = None
@@ -36,7 +37,8 @@ class SSHManager:
             raise NotConnected("Not currently connected to a host: see sshmanager.connect()")
         if not self.__run_channel:
             self.__run_channel = self.__client.invoke_shell()
-        return self.__runcommand(channel=self.__run_channel, command=command)
+            self.__create_end_marker_script(self.__run_channel, '/tmp/ams_run_end_marker')
+        return self.__runcommand(channel=self.__run_channel, command=command, marker_script='/tmp/ams_run_end_marker')
 
 
     # returns a tuple (str, str, str) -> (stdout, stderr, exit code)
@@ -46,19 +48,26 @@ class SSHManager:
         if not self.__sudo_channel:
             self.__sudo_channel = self.__client.invoke_shell()
             self.__auth_sudo(self.__sudo_channel, sudo_password)
-        return self.__runcommand(channel=self.__sudo_channel, command=command)
+            self.__create_end_marker_script(self.__sudo_channel, '/tmp/ams_sudo_end_marker')
+        return self.__runcommand(channel=self.__sudo_channel, command=command, marker_script='/tmp/ams_sudo_end_marker')
 
-
-    def __runcommand(self, channel, command):
+    def __create_end_marker_script(self, channel, filename):
+        channel.send("echo '#!/bin/bash\necho {0}' > {1}\n chmod +x {2}\n".format(self.__finish_marker, filename, filename))
+        time.sleep(0.1)
+        while not channel.recv_ready():
+            time.sleep(0.05)
         self.__flush_output_buffer(channel)
 
-        running_command = command.strip() + self.__command_append
+    def __runcommand(self, channel, command, marker_script):
+        self.__flush_output_buffer(channel)
+
+        running_command = command.strip() + self.__command_append + marker_script + "\n"
         channel.send(running_command)
         res = ''
         time.sleep(0.1)
         while not channel.recv_ready():
             time.sleep(0.05)
-        while channel.recv_ready():
+        while channel.recv_ready() or not self.__finish_marker in res:
             res += channel.recv(1024)
             time.sleep(0.05)
         stdout = res.splitlines()

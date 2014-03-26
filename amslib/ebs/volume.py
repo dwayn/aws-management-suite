@@ -147,6 +147,7 @@ class VolumeManager(BaseManager):
                     raise VolumeNotAvailable("There was an error attaching {0} to {1}".format(vol.id, instance_id))
             time.sleep(5)
 
+        print "Volumes attached"
 
 
         #TODO need to discover if the disks got attached at sd*, hd* or xvd* and rewrite the data in mysql
@@ -380,7 +381,7 @@ class VolumeManager(BaseManager):
             fstab.append(new_fstab_line)
 
         stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
-        sh.sudo("echo '{0}' >> /etc/fstab".format("\n".join(fstab)), sudo_password=self.settings.SUDO_PASSWORD)
+        sh.sudo("echo '{0}' > /etc/fstab".format("\n".join(fstab).replace("\n\n", "\n")), sudo_password=self.settings.SUDO_PASSWORD)
         sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
 
         if not remove:
@@ -403,13 +404,14 @@ class VolumeManager(BaseManager):
                 mdadm_line = None
                 for line in scan:
                     m = re.match('^ARRAY\s+([^\s]+)\s.*', line)
-                    if m and m.group(1) == block_device:
-                        mdadm_line = m.group(0)
-                    else:
-                        stdout, stderr, exit_code = sh.sudo("ls -l --color=never {0}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.SUDO_PASSWORD)
-                        if stdout.strip():
-                            if os.path.basename(stdout.strip()) == os.path.basename(block_device):
-                                mdadm_line = m.group(0).replace(m.group(1), block_device)
+                    if m:
+                        if m.group(1) == block_device:
+                            mdadm_line = m.group(0)
+                        else:
+                            stdout, stderr, exit_code = sh.sudo("ls -l --color=never {0}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.SUDO_PASSWORD)
+                            if stdout.strip():
+                                if os.path.basename(stdout.strip()) == os.path.basename(block_device):
+                                    mdadm_line = m.group(0).replace(m.group(1), block_device)
 
                 if not mdadm_line:
                     raise VolumeMountError("mdadm --detail --scan did not return an mdadm configuration for {0}".format(block_device))
@@ -432,7 +434,8 @@ class VolumeManager(BaseManager):
             sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev', sudo_password=self.settings.SUDO_PASSWORD)
             print "Writing new /etc/mdadm.conf file"
             for line in conf:
-                sh.sudo("echo '{0}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
+                if line:
+                    sh.sudo("echo '{0}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
 
 
 
@@ -843,9 +846,9 @@ class VolumeManager(BaseManager):
 
         self.attach_volume_group(instance_id, args.volume_group_id)
         self.assemble_raid(instance_id, args.volume_group_id, False)
-        automount = False
+        automount = True
         if args.no_automount:
-            automount = True
+            automount = False
         if args.mount_point:
             self.mount_volume_group(instance_id, args.volume_group_id, args.mount_point, automount)
 
