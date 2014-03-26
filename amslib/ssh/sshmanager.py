@@ -59,7 +59,7 @@ class SSHManager:
             time.sleep(0.05)
         while channel.recv_ready() or res.count(self.__finish_marker) < 2:
             res += channel.recv(1024)
-            time.sleep(0.05)
+            time.sleep(0.1)
         self.__flush_output_buffer(channel)
 
     def __runcommand(self, channel, command, marker_script):
@@ -73,7 +73,7 @@ class SSHManager:
             time.sleep(0.05)
         while channel.recv_ready() or not self.__finish_marker in res:
             res += channel.recv(1024)
-            time.sleep(0.05)
+            time.sleep(0.1)
         stdout = res.splitlines()
 
         #print stdout
