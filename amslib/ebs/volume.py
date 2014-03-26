@@ -365,24 +365,29 @@ class VolumeManager(BaseManager):
 
         new_fstab_line = "{0} {1} {2} {3}".format(block_device, mount_point, fs_type, mount_options)
         stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
-        fstab = stdout.split("\n")
-        found = False
-        for i in range(0, len(fstab)):
-            line = fstab[i]
-            m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
-            if m:
-                if remove:
-                    fstab[i] = ''
-                else:
-                    fstab[i] = new_fstab_line
-                found = True
-                break
-        if not found and not remove:
-            fstab.append(new_fstab_line)
 
-        stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
-        sh.sudo("echo '{0}' > /etc/fstab".format("\n".join(fstab).replace("\n\n", "\n")), sudo_password=self.settings.SUDO_PASSWORD)
-        sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
+        # Checking that stdout is not empty is a safety check to make sure that fstab does not get blown away in case there is some issue getting
+        # current contents of fstab file. Based on an observed bug that effectively renders an instance useless on reboot
+        # as /dev/pts doesn't get mounted so ssh does not work
+        if stdout.strip():
+            fstab = stdout.split("\n")
+            found = False
+            for i in range(0, len(fstab)):
+                line = fstab[i]
+                m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
+                if m:
+                    if remove:
+                        fstab[i] = ''
+                    else:
+                        fstab[i] = new_fstab_line
+                    found = True
+                    break
+            if not found and not remove:
+                fstab.append(new_fstab_line)
+
+            stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
+            sh.sudo("echo '{0}' > /etc/fstab".format("\n".join(fstab).replace("\n\n", "\n")), sudo_password=self.settings.SUDO_PASSWORD)
+            sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
 
         if not remove:
             self.db.execute("update host_volumes set mount_point=%s where volume_group_id=%s", (mount_point, volume_group_id))
