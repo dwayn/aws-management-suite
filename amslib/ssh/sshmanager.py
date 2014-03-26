@@ -53,10 +53,10 @@ class SSHManager:
 
     def __create_end_marker_script(self, channel, filename):
         channel.send("echo '#!/bin/bash\necho {0}' > {1}\n chmod +x {1}\n{1}\n".format(self.__finish_marker, filename))
-        time.sleep(0.1)
+        time.sleep(0.2)
         res = ''
         while not channel.recv_ready():
-            time.sleep(0.05)
+            time.sleep(0.1)
         while channel.recv_ready() or res.count(self.__finish_marker) < 2:
             res += channel.recv(1024)
             time.sleep(0.1)
@@ -68,9 +68,9 @@ class SSHManager:
         running_command = command.strip() + self.__command_append + marker_script + "\n"
         channel.send(running_command)
         res = ''
-        time.sleep(0.1)
+        time.sleep(0.2)
         while not channel.recv_ready():
-            time.sleep(0.05)
+            time.sleep(0.1)
         while channel.recv_ready() or not self.__finish_marker in res:
             res += channel.recv(1024)
             time.sleep(0.1)
@@ -113,12 +113,12 @@ class SSHManager:
         self.__flush_output_buffer(channel)
         channel.send('cat {0}\n'.format(self.__stderr_fname))
         res = ''
-        time.sleep(0.1)
+        time.sleep(0.2)
         while not channel.recv_ready():
-            time.sleep(0.05)
+            time.sleep(0.1)
         while channel.recv_ready():
             res += channel.recv(1024)
-            time.sleep(0.05)
+            time.sleep(0.1)
         stderr = res.splitlines()
         prefix = self.__stderr_fname[0:25]
         start_id = 0
@@ -134,9 +134,9 @@ class SSHManager:
         #print "EXIT CODE----------"
         channel.send('cat {0}\n'.format(self.__exit_code_fname))
         res = ''
-        time.sleep(0.1)
+        time.sleep(0.2)
         while not channel.recv_ready():
-            time.sleep(0.05)
+            time.sleep(0.1)
         while channel.recv_ready():
             res += channel.recv(1024)
             # increased the delay here as sometimes this is a bit slow to return (need to look into this
@@ -146,7 +146,7 @@ class SSHManager:
         code = res.splitlines()
         if len(code) <= 2: # we haven't received all the expected lines back
             while not channel.recv_ready():
-                time.sleep(0.05)
+                time.sleep(0.1)
             while channel.recv_ready():
                 res += channel.recv(1024)
                 # increased the delay here as sometimes this is a bit slow to return (need to look into this
@@ -161,8 +161,9 @@ class SSHManager:
         code = code[start_id]
         #print code
         channel.send("rm -f {0} {1}\n".format(self.__exit_code_fname, self.__stderr_fname))
+        time.sleep(0.2)
         while not channel.recv_ready():
-            time.sleep(0.05)
+            time.sleep(0.1)
         self.__flush_output_buffer(channel)
 
         return (stderr, code)
