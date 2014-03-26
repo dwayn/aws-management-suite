@@ -60,7 +60,8 @@ your terminal or `source .bashrc` (or .profile or .bash_profile).
 `eval "$(register-python-argcomplete ams)"`
 
 ### Upgrading
-If you have updated the code base, just run `ams internals database upgrade` to run the update scripts. Upgrade can be run as often as you like, as it will do nothing if the database version matches the code version.
+If you have updated the code base, just run `pip install -r requirements.txt` to install any new dependencies and run `ams internals database upgrade` to run the update scripts
+for the database tables. Upgrade scripts can be run as often as you like, as it will do nothing if the database version matches the code version.
 
 
 
