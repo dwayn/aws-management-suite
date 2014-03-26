@@ -678,6 +678,7 @@ class SnapshotManager(BaseManager):
         # ams snapshot schedule run
         sschedulerunparser = sschedulesubparser.add_parser("run", help="Run the scheduled snapshots now")
         sschedulerunparser.add_argument('schedule_id', nargs='?', type=int, help="Snapshot schedule_id to run. If not supplied, then whatever is scheduled for the current time will run")
+        sschedulerunparser.add_argument('--purge', action='store_true', help="delete expired snapshots after running the schedule")
         sschedulerunparser.set_defaults(func=self.command_snapshot_schedule_run)
 
 
@@ -1003,6 +1004,10 @@ class SnapshotManager(BaseManager):
 
     def command_snapshot_schedule_run(self, args):
         self.run_snapshot_schedule(args.schedule_id)
+        if args.purge:
+            a = type("", (), {})()  # this just instantiates a blank object
+            a.type = 'expired'
+            self.command_snapshot_delete(a)
 
     def command_snapshot_delete(self, args):
         if args.type == 'expired':
