@@ -101,11 +101,11 @@ class SSHManager:
         return (stdout, stderr, exit_code)
 
     def __flush_output_buffer(self, channel):
-        time.sleep(0.05)
+        time.sleep(0.2)
         while channel.recv_ready():
             # clear the buffer
             channel.recv(1024)
-            time.sleep(0.05)
+            time.sleep(0.1)
 
 
     # returns tuple (stderr, exit code)
@@ -173,21 +173,24 @@ class SSHManager:
         self.__flush_output_buffer(channel)
 
         channel.send("sudo su -\n")
+        time.sleep(0.2)
         while not channel.recv_ready():
             #print "Waiting for root challenge..."
-            time.sleep(0.05)
+            time.sleep(0.1)
         res = ''
         while channel.recv_ready():
             res += channel.recv(1024)
+            time.sleep(0.1)
         lines = res.splitlines()
         #print '-------------------------------------'
         #print lines[len(lines) - 1]
         #print '-------------------------------------'
         if lines[len(lines) - 1] == "Password:":
             channel.send("%s\n" % sudo_password)
+            time.sleep(0.2)
             while not channel.recv_ready():
                 #print "Authenticating..."
-                time.sleep(0.05)
+                time.sleep(0.1)
             res = ''
             while channel.recv_ready():
                 res += channel.recv(1024)
