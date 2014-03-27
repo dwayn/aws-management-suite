@@ -154,8 +154,9 @@ class SSHManager:
         code = res.splitlines()
 
         start_id = 0
+        xc_prefix = self.__exit_code_fname[:20]
         for x in range(len(code) - 1, -1, -1):
-            if self.__exit_code_fname in code[x]:
+            if xc_prefix in code[x]:
                 start_id = x + 1
                 break
         code = code[start_id]
