@@ -811,6 +811,10 @@ If a `schedule_id` is provided then the snapshot for the schedule points to will
 effort to apply the retention rules so the snapshot will eventually be cleaned up). Take note that if a valid expiry time can be calculated the
 snapshot will be automatically purged per the rules of the schedule. If you want a snapshot that will not expire use `ams snapshot create` to create a snapshot.
 
+Arguments:
+
+      --purge      delete expired snapshots after running the schedule
+
 ----
 
 ## Internals
