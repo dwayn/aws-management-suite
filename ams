@@ -27,10 +27,10 @@ vm = VolumeManager(settings)
 snapmanager = SnapshotManager(settings)
 im = InstanceManager(settings)
 
+amsroot = os.path.realpath(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename))
 
 def install_db(args):
-    f = inspect.getframeinfo(inspect.currentframe()).filename
-    filename = os.path.dirname(os.path.abspath(f)) + '/schema/schema.sql'
+    filename = os.path.dirname(amsroot) + '/schema/schema.sql'
     sqlfile = open(filename, "r")
     sqlcontents = sqlfile.read()
     statements = sqlcontents.split("\n\n--\n\n")
@@ -42,8 +42,7 @@ def install_db(args):
 
 
 def upgrade_db(args):
-    f = inspect.getframeinfo(inspect.currentframe()).filename
-    pathstub = os.path.dirname(os.path.abspath(f)) + '/schema/versions/'
+    pathstub = os.path.dirname(amsroot) + '/schema/versions/'
     filename_stub = 'db-version-'
     extension = '.sql'
 

@@ -1,6 +1,7 @@
 aws-management-suite
 ====================
 
+Source URL: https://github.com/dwayn/aws-management-suite
 
 # Introduction
 This is currently very much a work in progress, and there is much that will be cleaned up over time. The goal of this suite is to
