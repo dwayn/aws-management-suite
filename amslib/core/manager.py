@@ -1,5 +1,6 @@
 import MySQLdb
 import argparse
+import prettytable
 
 
 class BaseManager:
@@ -23,3 +24,24 @@ class BaseManager:
     def argument_parser_builder(self, parser):
         raise NotImplementedError("argument_parser_builder not implemented")
 
+
+    def output_formatted(self, table_title, column_headers, data):
+        def tstr(x):
+            if x is not None:
+                return str(x)
+            else:
+                return ""
+
+        if self.settings.human_output:
+            print "\n\n{0}:".format(table_title)
+            table = prettytable.PrettyTable(column_headers)
+            table.align = 'l'
+            for row in data:
+                table.add_row(map(tstr, row))
+            print table
+            print "\n\n"
+        else:
+            for row in data:
+                print "\t".join(map(tstr, row))
+
+        pass

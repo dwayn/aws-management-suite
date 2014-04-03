@@ -1,7 +1,6 @@
 import time
 import re
 import os
-import prettytable
 import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
@@ -120,17 +119,8 @@ class InstanceManager(BaseManager):
         sql += order_by
         self.db.execute(sql)
         results = self.db.fetchall()
-
-        if self.settings.human_output:
-            print "\n\nHosts:"
-            table = prettytable.PrettyTable(["Hostname", "instance_id", "availability_zone", "name", "notes"])
-            for res in results:
-                table.add_row(res)
-            print table
-            print "\n\n"
-        else:
-            for res in results:
-                print "{0}\t{1}\t{2}\t{3}\t{4}".format(res[0], res[1], res[2], res[3], res[4])
+        headers = ["Hostname", "instance_id", "availability_zone", "name", "notes"]
+        self.output_formatted("Hosts", headers, results)
 
 
     def command_host_add(self, args):

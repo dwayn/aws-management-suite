@@ -2,7 +2,6 @@ __author__ = 'dwayn'
 import time
 import re
 import os
-import prettytable
 import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
@@ -803,17 +802,9 @@ class VolumeManager(BaseManager):
         self.db.execute(sql)
         results = self.db.fetchall()
 
-        if self.settings.human_output:
-            print "\n\nVolume groups:"
-            table = prettytable.PrettyTable(["volume_group_id", "availability_zone", "volumes_in_group", "raid_level", "GiB", "iops", "instance_id", "hostname", "mount_point", "block_device"])
-            table.align["volume_group_id"] = 'l'
-            for res in results:
-                table.add_row(res)
-            print table
-            print "\n\n"
-        else:
-            for res in results:
-                print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8], res[9])
+        headers = ["volume_group_id", "availability_zone", "volumes_in_group", "raid_level", "GiB", "iops", "instance_id", "hostname", "mount_point", "block_device"]
+        self.output_formatted("Volume Groups", headers, results)
+
 
 
     def command_volume_create(self, args):

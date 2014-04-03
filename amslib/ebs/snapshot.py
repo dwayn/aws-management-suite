@@ -10,7 +10,6 @@ from amslib.core.manager import BaseManager
 from volume import VolumeManager
 from amslib.ssh.sshmanager import SSHManager
 from errors import *
-import prettytable
 
 class SnapshotSchedule:
     def __init__(self):
@@ -747,19 +746,8 @@ class SnapshotManager(BaseManager):
 
         self.db.execute(sql, whereargs)
         rows = self.db.fetchall()
-        if self.settings.human_output:
-            print "\n\nVolume groups:"
-            table = prettytable.PrettyTable(["snapshot_group_id", "host", "instance", "mount point", "volume_group_id", "volume type", "raid level", "filesystem", "num volumes", "total size", "iops", "region", "created date", "expires", "description"])
-            table.align["snapshot_group_id"] = "l"
-            for row in rows:
-                table.add_row(row)
-            print table
-            print "\n\n"
-        else:
-            # TODO this is getting annoying...do this better and stop the copypasta ugly code
-            for res in rows:
-                print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}\t{14}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9],res[10],res[11],res[12],res[13],res[14])
-
+        headers = ["snapshot_group_id", "host", "instance", "mount point", "volume_group_id", "volume type", "raid level", "filesystem", "num volumes", "total size", "iops", "region", "created date", "expires", "description"]
+        self.output_formatted("Snapshots", headers, rows)
 
 
     def command_snapshot_clone(self, args):
@@ -901,17 +889,8 @@ class SnapshotManager(BaseManager):
         sql += order_by
         self.db.execute(sql)
         results = self.db.fetchall()
-        if self.settings.human_output:
-            print "\n\nSnapshot Schedules:"
-            table = prettytable.PrettyTable(["schedule_id", "hostname", "instance_id", "mount_point", "volume_group_id", "intervals(h-d-w-m)", "retentions(h-d-w-m-y)", "pre_command", "post_command", "description"])
-            table.align["schedule_id"] = "l"
-            for res in results:
-                table.add_row(res)
-            print table
-            print "\n\n"
-        else:
-            for res in results:
-                print "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(res[0],res[1],res[2],res[3],res[4],res[5],res[6],res[7],res[8],res[9])
+        headers = ["schedule_id", "hostname", "instance_id", "mount_point", "volume_group_id", "intervals(h-d-w-m)", "retentions(h-d-w-m-y)", "pre_command", "post_command", "description"]
+        self.output_formatted("Snapshot Schedules", headers, results)
 
 
     def command_snapshot_schedule_add(self, args):
