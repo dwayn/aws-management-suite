@@ -100,7 +100,7 @@ Arguments:
 
 ----
 
-#### `ams host list instance_id [instance id]`
+#### `ams host list instance [instance id]`
 If `instance id` is given then it will match instance_id exactly
 
 Arguments:
@@ -207,7 +207,7 @@ Arguments:
 
 ----
 
-#### `ams volume list instance_id [instance_id]`
+#### `ams volume list instance [instance_id]`
 Lists the volume groups for an instance or instances<br>
 If `instance id` is given then it will match instance_id exactly
 
