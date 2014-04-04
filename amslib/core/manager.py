@@ -1,7 +1,7 @@
 import MySQLdb
 import argparse
 import prettytable
-
+import logging
 
 class BaseManager:
     def __init__(self, settings):
@@ -12,7 +12,7 @@ class BaseManager:
                              passwd=self.settings.TRACKING_DB['pass'],
                              db=self.settings.TRACKING_DB['dbname'])
         self.db = self.dbconn.cursor()
-
+        self.logger = self.get_logger()
         self.boto_conns = {}
 
     def build_argument_parser(self, parser):
@@ -44,4 +44,12 @@ class BaseManager:
             for row in data:
                 print "\t".join(map(tstr, row))
 
-        pass
+
+    def get_logger(self):
+        if not hasattr(self.settings, 'logger'):
+            self.settings.logger = logging.getLogger('ams')
+            amsloglevel = getattr(logging, self.settings.AMS_LOGLEVEL.upper(), 'WARNING')
+            globalloglevel = getattr(logging, self.settings.GLOBAL_LOGLEVEL.upper(), 'CRITICAL')
+            logging.basicConfig(level=globalloglevel)
+            self.settings.logger.setLevel(level=amsloglevel)
+        return self.settings.logger

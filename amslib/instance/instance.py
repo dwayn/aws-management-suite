@@ -1,12 +1,6 @@
-import time
-import re
-import os
 import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
-from amslib.ssh.sshmanager import SSHManager
-# from errors import *
-
 
 class InstanceManager(BaseManager):
 
@@ -23,15 +17,15 @@ class InstanceManager(BaseManager):
     def discover(self):
         regions = boto.ec2.regions()
         for region in regions:
-            print region.name
+            self.logger.info("Processing region".format(region.name))
             botoconn = self.__get_boto_conn(region.name)
-            print "getting instances"
+            self.logger.info("Getting instances")
             try:
                 instances = botoconn.get_only_instances()
             except boto.exception.EC2ResponseError:
                 continue
             for i in instances:
-                print "Found instance {0}".format(i.id)
+                self.logger.info("Found instance {0}".format(i.id))
                 name = None
                 if 'Name' in i.tags:
                     name = i.tags['Name']
@@ -53,7 +47,6 @@ class InstanceManager(BaseManager):
                                                                             i.placement, name, hint, hext, i.private_ip_address,
                                                                             i.ip_address, i.image_id, i.instance_type, i.placement, name))
                 self.dbconn.commit()
-        pass
 
     def argument_parser_builder(self, parser):
 

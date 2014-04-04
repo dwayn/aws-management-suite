@@ -39,3 +39,7 @@ SUDO_PASSWORD = None if not SUDO_PASSWORD or SUDO_PASSWORD.lower() == 'none' els
 
 # Expand '~' if it has been used to specify the ssh keyfile location
 SSH_KEYFILE = None if not SSH_KEYFILE else os.path.expanduser(SSH_KEYFILE)
+# sets the output log level, supported values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+AMS_LOGLEVEL = 'INFO'
+# set the log level for all modules using logging module
+GLOBAL_LOGLEVEL = 'CRITICAL'

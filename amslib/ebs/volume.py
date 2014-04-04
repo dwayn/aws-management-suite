@@ -48,7 +48,8 @@ class VolumeManager(BaseManager):
             block_device = None
             volumes.append(self.get_volume_struct(vol.id, availability_zone, per_volume_size, x, block_device, piops, None, tags))
         available = False
-        print "Waiting on volumes to become available"
+        self.logger.info("Waiting on volumes to become available")
+
         while not available:
             available = True
             for v in vols:

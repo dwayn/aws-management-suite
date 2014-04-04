@@ -9,7 +9,6 @@ import os
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
-import prettytable
 # DO NOT CHANGE THIS VARIABLE
 DATABASE_VERSION = 8
 #############################
@@ -22,7 +21,9 @@ dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
                      db=settings.TRACKING_DB['dbname'])
 db = dbconn.cursor()
 
-settings.human_output = True
+if not hasattr(settings, 'human_output'):
+    settings.human_output = True
+
 vm = VolumeManager(settings)
 snapmanager = SnapshotManager(settings)
 im = InstanceManager(settings)
