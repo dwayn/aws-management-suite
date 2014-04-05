@@ -155,7 +155,7 @@ class SnapshotManager(BaseManager):
         self.db.execute("insert into deleted_snapshot_groups select * from snapshot_groups where snapshot_group_id=%s",(snapshot_group_id, ))
         self.db.execute("delete from snapshot_groups where snapshot_group_id=%s",(snapshot_group_id, ))
         self.dbconn.commit()
-        print "Deleted snapshot group {0}".format(snapshot_group_id)
+        self.logger.info("Deleted snapshot group {0}".format(snapshot_group_id))
 
 
     # copy an entire snapshot group to a region
@@ -317,7 +317,7 @@ class SnapshotManager(BaseManager):
 
             volumes.append(vm.get_volume_struct(vol.id, availability_zone, snapshot_details[s.id][2], snapshot_details[s.id][4], None, iops, None, snapshot_details[s.id][14]))
         available = False
-        print "Waiting on volumes to become available"
+        self.logger.info("Waiting on volumes to become available")
         while not available:
             available = True
             for v in vols:
@@ -352,11 +352,11 @@ class SnapshotManager(BaseManager):
         self.dbconn.commit()
         snapshot_group_id = self.db.lastrowid
 
-        print snapshot_group_id
+        self.logger.info("New snapshot_group_id: {0}".format(snapshot_group_id))
 
         for x in range(0, len(snapshots)):
             snapshots[x]['snapshot_group_id'] = snapshot_group_id
-            print snapshots[x]
+            self.logger.debug(snapshots[x])
 
             if expiry_date:
                 expdate = expiry_date.strftime('%Y-%m-%d %H:%M:%S')
@@ -474,13 +474,13 @@ class SnapshotManager(BaseManager):
             self.db.execute(sql + " where schedule_id=%s", (schedule_id, ))
             schedules = self.db.fetchall()
             if not schedules:
-                print "Schedule not found"
+                self.logger.info("Schedule not found")
                 return
         else:
             self.db.execute(sql)
             schedules = self.db.fetchall()
             if not schedules:
-                print "No snapshot schedules found"
+                self.logger.info("No snapshot schedules found")
                 return
 
         for schedule in schedules:
@@ -683,7 +683,6 @@ class SnapshotManager(BaseManager):
 
     def command_snapshot_list(self, args):
 
-        print "Snapshot list function"
         whereclauses = []
         whereargs = []
         if args.type == 'volume':
@@ -742,8 +741,6 @@ class SnapshotManager(BaseManager):
             sql += " where " + " and ".join(whereclauses)
         sql += " group by snapshot_group_id"
 
-        print sql
-
         self.db.execute(sql, whereargs)
         rows = self.db.fetchall()
         headers = ["snapshot_group_id", "host", "instance", "mount point", "volume_group_id", "volume type", "raid level", "filesystem", "num volumes", "total size", "iops", "region", "created date", "expires", "description"]
@@ -759,7 +756,7 @@ class SnapshotManager(BaseManager):
             self.db.execute("select availability_zone, instance_id from hosts where host=%s", (args.host, ))
             r = self.db.fetchone()
             if not r:
-                print "Host '{0}' not found".format(args.host)
+                self.logger.error("Host '{0}' not found".format(args.host))
                 return
             zone, instance_id = r
             if args.no_automount:
@@ -769,7 +766,7 @@ class SnapshotManager(BaseManager):
             self.db.execute("select availability_zone from hosts where instance_id=%s", (args.instance, ))
             r = self.db.fetchone()
             if not r:
-                print "Instance '{0}' not found".format(args.instance)
+                self.logger.error("Instance '{0}' not found".format(args.instance))
                 return
             zone = r[0]
             if args.no_automount:
@@ -788,19 +785,19 @@ class SnapshotManager(BaseManager):
                 self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (args.volume_group_id, ))
                 r = self.db.fetchone()
                 if not r:
-                    print "No snapshots found for volume group {0}".format(args.volume_group_id)
+                    self.logger.error("No snapshots found for volume group {0}".format(args.volume_group_id))
                     return
                 snapshot_group_id = r[0]
             elif args.subtype == "host":
                 self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where host=%s and mount_point=%s", (args.hostname, args.src_mount_point))
                 r = self.db.fetchone()
                 if not r:
-                    print "Volume group not found for {0} on {1}".format(args.src_mount_point, args.host)
+                    self.logger.error("Volume group not found for {0} on {1}".format(args.src_mount_point, args.host))
                     return
                 self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (r[0], ))
                 r = self.db.fetchone()
                 if not r:
-                    print "No snapshots found for {0} on {1}".format(args.src_mount_point, args.host)
+                    self.logger.error("No snapshots found for {0} on {1}".format(args.src_mount_point, args.host))
                     return
                 snapshot_group_id = r[0]
 
@@ -808,17 +805,17 @@ class SnapshotManager(BaseManager):
                 self.db.execute("select volume_group_id from hosts h join host_volumes hv on h.instance_id = hv.instance_id where h.instance_id=%s and mount_point=%s", (args.instance_id, args.src_mount_point))
                 r = self.db.fetchone()
                 if not r:
-                    print "Volume group not found for {0} on {1}".format(args.src_mount_point, args.instance)
+                    self.logger.error("Volume group not found for {0} on {1}".format(args.src_mount_point, args.instance))
                     return
                 self.db.execute("select snapshot_group_id from snapshot_groups where volume_group_id=%s order by snapshot_group_id desc limit 1", (r[0], ))
                 r = self.db.fetchone()
                 if not r:
-                    print "No snapshots found for {0} on {1}".format(args.src_mount_point, args.instance)
+                    self.logger.error("No snapshots found for {0} on {1}".format(args.src_mount_point, args.instance))
                     return
                 snapshot_group_id = r[0]
 
         volume_group_id = self.clone_snapshot_group(snapshot_group_id, zone, args.iops, instance_id, mount_point, automount)
-        print "Volume group {0} created".format(volume_group_id)
+        self.logger.info("Volume group {0} created".format(volume_group_id))
 
     def command_snapshot_create_volume(self, args):
         self.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
@@ -845,7 +842,7 @@ class SnapshotManager(BaseManager):
         if res:
             self.snapshot_volume_group(res[0], args.description, args.pre, args.post)
         else:
-            print "Volume group not found"
+            self.logger.error("Volume group not found")
             exit(1)
 
     #TODO refactor how the query is being built to not build the sql string directly but use %s instead
@@ -971,7 +968,7 @@ class SnapshotManager(BaseManager):
             updates['retain_yearly'] = args.retentions[4]
 
         if not len(updates):
-            print "Must provide something to update on a snapshot schedule"
+            self.logging.error("Must provide something to update on a snapshot schedule")
             return
 
         self.edit_snapshot_schedule(args.schedule_id, updates)
@@ -993,7 +990,7 @@ class SnapshotManager(BaseManager):
             self.db.execute("select snapshot_group_id from snapshot_groups join snapshots using(snapshot_group_id) where expiry_date < now() group by snapshot_group_id")
             rows = self.db.fetchall()
             if not rows:
-                print "No expired snapshots to delete"
+                self.logging.error("No expired snapshots to delete")
                 return
             for row in rows:
                 self.delete_snapshot_group(row[0])

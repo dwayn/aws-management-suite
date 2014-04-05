@@ -9,11 +9,6 @@ class InstanceManager(BaseManager):
             self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
         return self.boto_conns[region]
 
-
-
-
-
-
     def discover(self):
         regions = boto.ec2.regions()
         for region in regions:
@@ -130,7 +125,7 @@ class InstanceManager(BaseManager):
                                                                                                          args.notes,
                                                                                                          args.name))
         self.dbconn.commit()
-        print "Added instance {0}({1}) to list of managed hosts".format(args.hostname, args.instance)
+        self.logger.info("Added instance {0}({1}) to list of managed hosts".format(args.hostname, args.instance))
 
     def command_host_edit(self, args):
         fields = ['hostname_internal', 'hostname_external', 'ip_internal', 'ip_external', 'ami_id', 'instance_type', 'notes', 'name']
@@ -153,11 +148,11 @@ class InstanceManager(BaseManager):
             if val == "":
                 updates.append("{0}=NULL".format(f))
         if len(updates) == 0:
-            print "Nothing to update"
+            self.logger.info("Nothing to update")
             return
 
         vars.append(args.instance)
         self.db.execute("update hosts set " + ", ".join(updates) + " where instance_id=%s", vars)
         self.dbconn.commit()
-        print "Instance {0} updated"
+        self.logger.info("Instance {0} updated")
 
