@@ -108,7 +108,7 @@ class VolumeManager(BaseManager):
             for vol in vols:
                 vol.update()
                 if vol.status == 'creating':
-                    print "Volume {0} not finished creating"
+                    self.logger.info("Volume {0} not finished creating")
                     volumes_ready = False
                 elif vol.status in ('in-use', 'deleting', 'deleted', 'error'):
                     raise VolumeNotAvailable("Volume {0} in volume_group {1} cannot be attached to instance. Current status: {2}".format(vol.id, volume_group_id, vol.status))
@@ -129,13 +129,13 @@ class VolumeManager(BaseManager):
                 block_device = '/dev/xvd' + dev_letter
             block_devices_in_use.append(block_device)
 
-            print "Attaching {0} as {1} to {2}".format(vol.id, block_device, instance_id)
+            self.logger.info("Attaching {0} as {1} to {2}".format(vol.id, block_device, instance_id))
             volumes[row[0]].attach(instance_id, block_device)
             self.db.execute("UPDATE volumes set block_device=%s where volume_id=%s", (block_device, row[0]))
             self.dbconn.commit()
 
 
-        print "Waiting for volumes to attach"
+        self.logger.info("Waiting for volumes to attach")
         waiting = True
         while waiting:
             waiting = False
@@ -147,11 +147,7 @@ class VolumeManager(BaseManager):
                     raise VolumeNotAvailable("There was an error attaching {0} to {1}".format(vol.id, instance_id))
             time.sleep(5)
 
-        print "Volumes attached"
-
-
-        #TODO need to discover if the disks got attached at sd*, hd* or xvd* and rewrite the data in mysql
-
+        self.logger.info("Volumes attached")
 
 
 
@@ -234,7 +230,7 @@ class VolumeManager(BaseManager):
                         dev_found = m.group(1)
 
                 if dev_found:
-                    print "Waiting 10 seconds to allow raid device to get ready"
+                    self.logger.info("Waiting 10 seconds to allow raid device to get ready")
                     time.sleep(10)
                     block_device = '/dev/' + dev_found
                 else:
@@ -313,7 +309,7 @@ class VolumeManager(BaseManager):
         self.db.execute("UPDATE host_volumes SET mount_point=%s WHERE instance_id=%s AND volume_group_id=%s", (mount_point, instance_id, volume_group_id))
         self.dbconn.commit()
 
-        print "Volume group {0} mounted on {1} ({2}) at {3}".format(volume_group_id, host, instance_id, mount_point)
+        self.logger.info("Volume group {0} mounted on {1} ({2}) at {3}".format(volume_group_id, host, instance_id, mount_point))
 
         #TODO add the entries to to /etc/mdadm.conf so the raid device is initialized on boot
         if automount:
@@ -368,7 +364,7 @@ class VolumeManager(BaseManager):
 
             if not mount_point:
                 raise VolumeMountError("No mount point defined and none can be determined for volume group".format(volume_group_id))
-
+        self.logger.info("Reading /etc/fstab")
         new_fstab_line = "{0} {1} {2} {3}".format(block_device, mount_point, fs_type, mount_options)
         stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
 
@@ -401,8 +397,9 @@ class VolumeManager(BaseManager):
 
             if not found and not remove:
                 fstab.append(new_fstab_line)
-
-            stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev")
+            self.logger.info("Copying /etc/fstab to /etc/fstab.prev")
+            stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev", sudo_password=self.settings.SUDO_PASSWORD)
+            self.logger.info("Writing out new /etc/fstab")
             sh.sudo("echo '{0}' > /etc/fstab".format("\n".join(fstab).replace("\n\n", "\n")), sudo_password=self.settings.SUDO_PASSWORD)
             sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
 
@@ -415,11 +412,11 @@ class VolumeManager(BaseManager):
         # if problems on debian (or other OS's), there may be more steps needed to get mdadm to autostart
         # http://superuser.com/questions/287462/how-can-i-make-mdadm-auto-assemble-raid-after-each-boot
         if group_type == 'raid':
-            print "Reading /etc/mdadm.conf"
+            self.logger.info("Reading /etc/mdadm.conf")
             stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf", sudo_password=self.settings.SUDO_PASSWORD)
             conf = stdout.split("\n")
             if not remove:
-                print "Reading current mdadm devices"
+                self.logger.info("Reading current mdadm devices")
                 stdout, stderr, exit_code = sh.sudo("mdadm --detail --scan ", sudo_password=self.settings.SUDO_PASSWORD)
                 scan = stdout.split("\n")
 
@@ -452,9 +449,9 @@ class VolumeManager(BaseManager):
             if not found and not remove:
                 conf.append(mdadm_line)
 
-            print "Backing up /etc/mdadm.conf to /etc/mdadm.conf.prev"
+            self.logger.info("Copying /etc/mdadm.conf to /etc/mdadm.conf.prev")
             sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev', sudo_password=self.settings.SUDO_PASSWORD)
-            print "Writing new /etc/mdadm.conf file"
+            self.logger.info("Writing new /etc/mdadm.conf file")
             for line in conf:
                 if line:
                     sh.sudo("echo '{0}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
@@ -470,11 +467,11 @@ class VolumeManager(BaseManager):
         self.dbconn.commit()
         volume_group_id = self.db.lastrowid
 
-        print volume_group_id
+        self.logger.info("New volume_group_id: {0}".format(volume_group_id))
 
         for x in range(0, len(volumes)):
             volumes[x]['volume_group_id'] = volume_group_id
-            print volumes[x]
+            self.logger.debug(volumes[x])
             self.db.execute("INSERT INTO volumes(volume_id, volume_group_id, availability_zone, size, piops, block_device, raid_device_id, tags)"
                               "VALUES(%s,%s,%s,%s,%s,%s,%s,%s)", (volumes[x]['volume_id'], volumes[x]['volume_group_id'], volumes[x]['availability_zone'],
                                                                   volumes[x]['size'],volumes[x]['piops'], volumes[x]['block_device'],
@@ -520,7 +517,6 @@ class VolumeManager(BaseManager):
 
         sh = SSHManager()
         sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
-        #TODO check if mounted, if not then noop
         block_device_match_pattern = '^([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
 
         stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.SUDO_PASSWORD)
@@ -546,9 +542,9 @@ class VolumeManager(BaseManager):
             stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:
                 raise VolumeMountError("Error unmounting volume with command: {0}\n{1}".format(command, stderr))
-            print "Volume group {0} unmounted from host {1} ".format(volume_group_id, host)
+            self.logger.info("Volume group {0} unmounted from host {1} ".format(volume_group_id, host))
         else:
-            print "Volume group {0} is not mounted ".format(volume_group_id)
+            self.logger.info("Volume group {0} is not mounted ".format(volume_group_id))
 
         self.db.execute("UPDATE host_volumes SET mount_point=%s WHERE instance_id=%s AND volume_group_id=%s", (None, instance_id, volume_group_id))
         self.dbconn.commit()
@@ -610,9 +606,9 @@ class VolumeManager(BaseManager):
             self.configure_volume_automount(volume_group_id, None, True)
             self.db.execute("delete from host_volumes where volume_group_id=%s", (volume_group_id, ))
             self.dbconn.commit();
-            print "Volume group {0} detached from instance {1}".format(volume_group_id, instance_id)
+            self.logger.info("Volume group {0} detached from instance {1}".format(volume_group_id, instance_id))
         else:
-            print "Volume group {0} not detached".format(volume_group_id)
+            self.logger.info("Volume group {0} not detached".format(volume_group_id))
 
 
     def delete_volume_group(self, volume_group_id):
@@ -659,7 +655,7 @@ class VolumeManager(BaseManager):
                 elif vol.attachment_state() in ('attaching', 'attached'):
                     raise VolumeNotAvailable("Volumes are currently attached or attaching, not deleting")
             if waiting:
-                print "Waiting for volumes to detach"
+                self.logger.info("Waiting for volumes to detach")
             time.sleep(5)
 
         success = True
@@ -669,7 +665,7 @@ class VolumeManager(BaseManager):
                 if not deleted:
                     success = False
             elif vol.status in ('deleted', 'deleting'):
-                print "Volume {0} is already deleted, skipping".format(vol.id)
+                self.logger.info("Volume {0} is already deleted, skipping".format(vol.id))
             else:
                 raise VolumeNotAvailable("Volume {0} not in a state that it can currently be deleted. Current state: {1}".format(vol.id, vol.status))
 
@@ -679,9 +675,9 @@ class VolumeManager(BaseManager):
             self.db.execute("delete from volume_groups where volume_group_id=%s", (volume_group_id, ))
             self.db.execute("delete from volumes where volume_group_id=%s", (volume_group_id, ))
             self.dbconn.commit()
-            print "Volume group {0} deleted".format(volume_group_id, instance_id)
+            self.logger.info("Volume group {0} deleted".format(volume_group_id, instance_id))
         else:
-            print "Volume group {0} not deleted (or not fully deleted)".format(volume_group_id)
+            self.logger.info("Volume group {0} not deleted (or not fully deleted)".format(volume_group_id))
 
 
     def argument_parser_builder(self, parser):
@@ -709,7 +705,7 @@ class VolumeManager(BaseManager):
         vcreateparser.add_argument('-m', '--mount-point', help="Set the mount point for volume. Not required, but suggested")
         vcreateparser.add_argument('-a', '--no-automount', help="Disable configuring the OS to automatically mount the volume group on reboot", action='store_true')
         #TODO should filesystem be a limited list?
-        vcreateparser.add_argument('-f', '--filesystem', help="Filesystem to partition new raid/volume", default="xfs")
+        vcreateparser.add_argument('-f', '--filesystem', help="Filesystem to partition new raid/volume (currently only support filesystems that can be partitioned using mkfs.XXX)", default="xfs")
         vcreateparser.add_argument('-s', '--size', type=int, help="Per EBS volume size in GiBs", required=True)
         vcreateparser.add_argument('-p', '--iops', type=int, help="Per EBS volume provisioned iops")
         vcreateparser.set_defaults(func=self.command_volume_create)
@@ -835,7 +831,7 @@ class VolumeManager(BaseManager):
             self.db.execute("select instance_id from hosts where host=%s", (args.host, ))
             row = self.db.fetchone()
             if not row:
-                print "Host {0} not found".format(args.host)
+                self.logger.error("Host {0} not found".format(args.host))
                 return
             instance_id = row[0]
 
@@ -847,14 +843,14 @@ class VolumeManager(BaseManager):
             self.db.execute("select instance_id from hosts where instance_id=%s",(args.instance, ))
             row = self.db.fetchone()
             if not row:
-                print "Instance ID {0} not recognized, try adding the host".format(args.instance)
+                self.logger.error("Instance ID {0} not recognized, try adding the host".format(args.instance))
                 return
             instance_id = row[0]
         elif args.host:
             self.db.execute("select instance_id from hosts where host=%s",(args.host, ))
             row = self.db.fetchone()
             if not row:
-                print "Instance ID not found for host: {0}".format(args.host)
+                self.logger.error("Instance ID not found for host: {0}".format(args.host))
                 return
             instance_id = row[0]
 
@@ -875,14 +871,14 @@ class VolumeManager(BaseManager):
             self.db.execute("select volume_group_id from hosts h join host_volumes hv using(instance_id) where host=%s and mount_point=%s", (args.hostname, args.mount_point))
             row = self.db.fetchone()
             if not row:
-                print "volume group not found for {0} on {1}".format(args.hostname, args.mount_point)
+                self.logger.error("volume group not found for {0} on {1}".format(args.hostname, args.mount_point))
                 return
             volume_group_id = row[0]
         elif args.type == 'instance':
             self.db.execute("select volume_group_id from hosts h join host_volumes hv using(instance_id) where instance_id=%s and mount_point=%s", (args.instance_id, args.mount_point))
             row = self.db.fetchone()
             if not row:
-                print "volume group not found for {0} on {1}".format(args.instance_id, args.mount_point)
+                self.logger.error("volume group not found for {0} on {1}".format(args.instance_id, args.mount_point))
                 return
             volume_group_id = row[0]
 
