@@ -66,9 +66,6 @@ def upgrade_db(args):
 
     db.execute("select value from config where var='DATABASE_VERSION'")
     v = db.fetchone()
-    if not v:
-        print "Current DATABASE_VERSION not found, database may need to be installed first"
-        return
     version = int(v[0])
     if version == DATABASE_VERSION:
         print "Database is up to date"
@@ -94,8 +91,8 @@ def main():
 
     subparsers = parser.add_subparsers(title="type", dest='type')
 
+    # all of the operational command parsers should be in here to force internals tasks that need to be done
     if settings.CURRENT_DATABASE_VERSION == DATABASE_VERSION:
-        # all of the operational command parsers should be in here to force upgrade of database tables when they need it
         hparser = subparsers.add_parser("host", help="direct host/instance related operations")
         im.build_argument_parser(hparser)
 
