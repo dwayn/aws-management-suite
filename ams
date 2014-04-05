@@ -10,7 +10,7 @@ from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
 # DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 8
+DATABASE_VERSION = 9
 #############################
 
 
@@ -20,6 +20,23 @@ dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
                      passwd=settings.TRACKING_DB['pass'],
                      db=settings.TRACKING_DB['dbname'])
 db = dbconn.cursor()
+
+try:
+    db.execute("select value from config where var = 'DATABASE_VERSION'")
+    row = db.fetchone()
+    if not row:
+        settings.CURRENT_DATABASE_VERSION = -1
+        print "\nDatabase has not been installed, before continuing you must run: ams internals database install\n\n"
+    else:
+        settings.CURRENT_DATABASE_VERSION = int(row[0])
+        if settings.CURRENT_DATABASE_VERSION != DATABASE_VERSION:
+            print "\nDatabase needs to be updated, before continuing you must run: ams internals database upgrade\n\n"
+
+except:
+    print "\nDatabase has not been installed, before continuing you must run: ams internals database install\n\n"
+    settings.CURRENT_DATABASE_VERSION = -1
+    pass
+
 
 if not hasattr(settings, 'human_output'):
     settings.human_output = True
@@ -74,27 +91,31 @@ def upgrade_db(args):
 def main():
     parser = argparse.ArgumentParser(prog="ams")
     parser.add_argument("-q", "--scriptable-output", action='store_true', help="removes human readability formatting for scripting purposes")
-    #parser.add_argument("type", help="resource type to manage")
-    #parser.add_argument("action", help="action to take on resource")
+
     subparsers = parser.add_subparsers(title="type", dest='type')
 
-    hparser = subparsers.add_parser("host", help="direct host/instance related operations")
-    im.build_argument_parser(hparser)
+    if settings.CURRENT_DATABASE_VERSION == DATABASE_VERSION:
+        # all of the operational command parsers should be in here to force upgrade of database tables when they need it
+        hparser = subparsers.add_parser("host", help="direct host/instance related operations")
+        im.build_argument_parser(hparser)
 
-    vparser = subparsers.add_parser("volume", help="EBS volume and software raid operations")
-    vm.build_argument_parser(vparser)
+        vparser = subparsers.add_parser("volume", help="EBS volume and software raid operations")
+        vm.build_argument_parser(vparser)
 
-    sparser = subparsers.add_parser("snapshot", help="EBS snapshot management operations")
-    snapmanager.build_argument_parser(sparser)
+        sparser = subparsers.add_parser("snapshot", help="EBS snapshot management operations")
+        snapmanager.build_argument_parser(sparser)
 
     iparser = subparsers.add_parser("internals", help="AMS internal managament")
     isubparser = iparser.add_subparsers(title="type", dest='type')
     dbparser = isubparser.add_parser("database", help="Manage the AMS metadata database")
     dbsubparser = dbparser.add_subparsers(title="action", dest='action')
-    p = dbsubparser.add_parser("install", help="Create all the tables for an initial installation")
-    p.set_defaults(func=install_db)
-    p = dbsubparser.add_parser("upgrade", help="Upgrade the database to the current version for AMS")
-    p.set_defaults(func=upgrade_db)
+    if settings.CURRENT_DATABASE_VERSION == -1:
+        p = dbsubparser.add_parser("install", help="Create all the tables for an initial installation")
+        p.set_defaults(func=install_db)
+    if settings.CURRENT_DATABASE_VERSION != -1:
+        p = dbsubparser.add_parser("upgrade", help="Upgrade the database to the current version for AMS")
+        p.set_defaults(func=upgrade_db)
+
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args()

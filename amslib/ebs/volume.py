@@ -123,10 +123,10 @@ class VolumeManager(BaseManager):
 
         dev_letter = 'f'
         for row in data:
-            block_device = '/dev/sd' + dev_letter
+            block_device = '/dev/xvd' + dev_letter
             while block_device in block_devices_in_use:
                 dev_letter = chr(ord(dev_letter) + 1)
-                block_device = '/dev/sd' + dev_letter
+                block_device = '/dev/xvd' + dev_letter
             block_devices_in_use.append(block_device)
 
             print "Attaching {0} as {1} to {2}".format(vol.id, block_device, instance_id)
@@ -359,6 +359,12 @@ class VolumeManager(BaseManager):
                         if m:
                             mount_point = m.group(2)
                             break
+                        else:
+                            # this handles the backwards compatibility of the switch from using /dev/sd* to using /dev/xvd*
+                            m = re.match(block_device_match_pattern.format(block_device.replace('/dev/xvd', '/dev/sd').replace('/', '\\/')), line)
+                            if m:
+                                mount_point = m.group(2)
+                                break
 
             if not mount_point:
                 raise VolumeMountError("No mount point defined and none can be determined for volume group".format(volume_group_id))
@@ -382,6 +388,17 @@ class VolumeManager(BaseManager):
                         fstab[i] = new_fstab_line
                     found = True
                     break
+                else:
+                    # this handles the backwards compatibility of the switch from using /dev/sd* to using /dev/xvd*
+                    m = re.match(block_device_match_pattern.format(block_device.replace('/dev/xvd', '/dev/sd').replace('/', '\\/')), line)
+                    if m:
+                        if remove:
+                            fstab[i] = ''
+                        else:
+                            fstab[i] = new_fstab_line
+                        found = True
+                        break
+
             if not found and not remove:
                 fstab.append(new_fstab_line)
 
@@ -515,9 +532,9 @@ class VolumeManager(BaseManager):
                 if volume_group_type == 'single':
                     if m.group(1) == block_device:
                         block_device_to_unmount = m.group(1)
-                    elif m.group(1).replace('/dev/xvd', '/dev/sd') == block_device:
+                    elif m.group(1).replace('/dev/hd', '/dev/xvd') == block_device:
                         block_device_to_unmount = m.group(1)
-                    elif m.group(1).replace('/dev/hd', '/dev/sd') == block_device:
+                    elif m.group(1).replace('/dev/sd', '/dev/xvd') == block_device:
                         block_device_to_unmount = m.group(1)
                 else:
                     if m.group(1) == block_device:
