@@ -43,12 +43,16 @@ Instance Management
 
 ## Setup and Configuration
 ### Initial installation
+* This tool may work on systems with python 2.5, but to date has only been tested on 2.6.6 and 2.7.6 and should run on any 2.6.x or 2.7.x version (3.x compatibility is unknown). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
+* The tool requires ssh and sudo access to hosts in order to accomplish tasks like mounting volumes and running system commands to start/stop services (for snapshots)
 * Copy sample_settings.py to settings.py and edit AWS, SSH and SUDO access credentials
 * A MySQL database needs to be setup for tracking state. The following statements assume that the mysql database and the tool are located on the same host:
  * `CREATE DATABASE ams;` -- Create the schema
  * `GRANT ALL PRIVILEGES ON ams.* TO 'ams_user'@'localhost' IDENTIFIED BY 'mypass';` -- (This will create user with username 'ams_user' and password of 'mypass' and give access to the new schema created)
 * Edit TRACKING_DB credentials in settings.py with the proper credentials for your MySQL database
 * `pip install -r requirements.txt` will install the handful of external dependencies
+ * You have option of either running pip install as root or if you have setup a virtualenv for this tool, then you you can run pip install without root in the virtual environment
+ * Documentation on setting the tool up with virtualenv is planned for the future
 * Suggested: add the path to ams directory to your path or add symlink to `ams` script to a directory in the system path
 * `ams internals database install` will create the current full version of all of the tables
 
@@ -62,7 +66,9 @@ your terminal or `source .bashrc` (or .profile or .bash_profile).
 
 ### Upgrading
 If you have updated the code base, just run `pip install -r requirements.txt` to install any new dependencies and run `ams internals database upgrade` to run the update scripts
-for the database tables. Upgrade scripts can be run as often as you like, as it will do nothing if the database version matches the code version.
+for the database tables. Upgrade scripts can be run as often as you like, as it will do nothing if the database version matches the code version. If the database version is not
+in sync with the current version defined in the tool, the tool will not allow any operations to be done until the internals database is upgraded; this is avoid the possiblity of
+corrupting data in the database due to expectations in the software.
 
 
 
