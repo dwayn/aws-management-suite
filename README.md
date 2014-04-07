@@ -824,6 +824,25 @@ Arguments:
 
 ----
 
+## Networking
+### Route53
+#### `ams route53 discovery`
+Reads the Route53 dns configurations and maps the hostnames defined in dns to the hosts in the hosts table. Currently this will pull all the records from dns down
+to the database, but it only uses A and CNAME records to assign hostnames to hosts. This will not traverse recursive CNAMEs currently (or likely ever), and as a
+general rule it will prefer an A record over a CNAME (I am open to arguments for/against this and any suggestions).
+
+Arguments:
+
+      --interactive         Enable interactive mode for applying discovered host
+                            names to hosts (not enabled yet)
+      --prefer {internal,external}
+                            Sets which hostname gets preference if DNS records are
+                            defined for an internal address and an external
+                            address
+      --load-only           Only load the route53 tables, but do not apply
+                            hostname changes to hosts
+
+
 ## Internals
 #### `ams internals database install`
 This will install the database table for an initial install of AMS.

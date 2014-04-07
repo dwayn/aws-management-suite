@@ -11,7 +11,7 @@ from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
 from amslib.network.route53 import Route53Manager
 # DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 9
+DATABASE_VERSION = 10
 #############################
 
 
