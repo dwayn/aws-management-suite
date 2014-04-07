@@ -103,10 +103,17 @@ class Route53Manager(BaseManager):
         discparser.add_argument("--load-only", help="Only load the route53 tables, but do not apply hostname changes to hosts", action='store_true')
         discparser.set_defaults(func=self.command_discover)
 
+        listparser = rsubparser.add_parser("list", help="List Route53 information currently in the database")
+        listparser.set_defaults(func=self.command_list)
 
 
     def command_discover(self, args):
         self.discovery(args.prefer, args.interactive, args.load_only)
 
-
+    def command_list(self, args):
+        self.db.execute("select r.name, r.type, r.weight, r.region, r.identifier, r.zone_id, z.name, r.resource_records from route53_zones z join route53_records r using(zone_id) order by r.name")
+        rows = self.db.fetchall()
+        headers = ['fqdns', 'type', 'weight', 'region', 'identifier', 'zone_id', 'dns group name', 'resource records']
+        self.output_formatted("Route53", headers, rows)
+        pass
 
