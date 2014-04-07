@@ -26,13 +26,15 @@ class Route53Manager(BaseManager):
             self.logger.debug(zd)
         # pp.pprint(zonesdata)
         zones = botoconn.get_zones()
+        self.logger.debug(zones)
+        # since we are pulling a complete list every time, we do not need records that exist prior to this load step
+        self.db.execute("truncate route53_records")
+        self.dbconn.commit()
         for z in zones:
+            self.logger.debug(z)
             recs = z.get_records()
             zone_id = recs.hosted_zone_id
 
-            # since we are pulling a complete list every time, we do not need records that exist prior to this load step
-            self.db.execute("truncate route53_records")
-            self.dbconn.commit()
             # if identifier is set, then the record is one of WRR, latency or failover. WRR will include a value for weight,
             #   latency will include a value for region, and failover will not include weight or region #TODO verify assumption on failover
             for r in recs:
@@ -54,9 +56,10 @@ class Route53Manager(BaseManager):
             if not hosts:
                 self.logger.warning("No hosts found, try running: ams host discovery")
                 return
-
+            self.logger.debug("number of hosts {0}".format(len(hosts)))
             for host in hosts:
                 if not (host[2] or host[3] or host[4] or host[5]):
+                    # self.logger.debug("Skipping {0}({1}) as it has no hostname or ip information".format(host[1], host[0]))
                     continue
                 hostname = None
                 if prefer_hostname == 'internal':
@@ -85,6 +88,8 @@ class Route53Manager(BaseManager):
 
 
     def get_fqdn_for_host(self, host_or_ip):
+        if not host_or_ip:
+            return None
         self.db.execute("select name from route53_records where identifier = '' and type in ('A', 'CNAME') and resource_records = %s", (host_or_ip,))
         row = self.db.fetchone()
         if not row:
