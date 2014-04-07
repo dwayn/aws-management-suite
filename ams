@@ -9,6 +9,7 @@ import os
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
+from amslib.network.route53 import Route53Manager
 # DO NOT CHANGE THIS VARIABLE
 DATABASE_VERSION = 9
 #############################
@@ -44,6 +45,7 @@ if not hasattr(settings, 'human_output'):
 vm = VolumeManager(settings)
 snapmanager = SnapshotManager(settings)
 im = InstanceManager(settings)
+r53 = Route53Manager(settings)
 
 amsroot = os.path.realpath(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename))
 
@@ -101,6 +103,9 @@ def main():
 
         sparser = subparsers.add_parser("snapshot", help="EBS snapshot management operations")
         snapmanager.build_argument_parser(sparser)
+
+        r53parser = subparsers.add_parser("route53", help="Route53 management operations")
+        r53.build_argument_parser(r53parser)
 
     iparser = subparsers.add_parser("internals", help="AMS internal managament")
     isubparser = iparser.add_subparsers(title="type", dest='type')

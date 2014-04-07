@@ -680,6 +680,10 @@ class VolumeManager(BaseManager):
             self.logger.info("Volume group {0} not deleted (or not fully deleted)".format(volume_group_id))
 
 
+    def discovery(self):
+        self.logger.error("Volume discovery not implemented yet")
+
+
     def argument_parser_builder(self, parser):
 
         vsubparser = parser.add_subparsers(title="action", dest='action')
@@ -771,7 +775,13 @@ class VolumeManager(BaseManager):
         vdeleteparser.add_argument('volume_group_id', type=int, help="ID of the volume group to delete")
         vdeleteparser.set_defaults(func=self.command_volume_delete)
 
-        return parser
+        # ams volume discovery
+        vdiscoverparser = vsubparser.add_parser("discovery", help="Run discovery on volumes to populate the database with volumes")
+        vdiscoverparser.set_defaults(func=self.command_volume_discover)
+
+
+    def command_volume_discover(self, args):
+        self.discovery()
 
 
     def command_volume_list(self, args):

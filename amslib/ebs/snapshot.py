@@ -532,6 +532,10 @@ class SnapshotManager(BaseManager):
 
         return struct
 
+
+    def discovery(self):
+        self.logger.error("Snapshot discovery not implemented yet")
+
     def argument_parser_builder(self, parser):
         ssubparser = parser.add_subparsers(title="action", dest='action')
         # ams snapshot create
@@ -680,6 +684,13 @@ class SnapshotManager(BaseManager):
         sschedulerunparser.add_argument('--purge', action='store_true', help="delete expired snapshots after running the schedule")
         sschedulerunparser.set_defaults(func=self.command_snapshot_schedule_run)
 
+        # ams volume discovery
+        sdiscoverparser = ssubparser.add_parser("discovery", help="Run discovery on snapshots to populate the database with snapshot data")
+        sdiscoverparser.set_defaults(func=self.command_volume_discover)
+
+
+    def command_volume_discover(self, args):
+        self.discovery()
 
     def command_snapshot_list(self, args):
 
