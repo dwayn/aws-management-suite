@@ -18,7 +18,10 @@ class Route53Manager(BaseManager):
         botoconn = self.__get_boto_conn()
         zonesdata = botoconn.get_all_hosted_zones()
         for zd in zonesdata['ListHostedZonesResponse']['HostedZones']:
-            self.db.execute("replace into route53_zones set zone_id=%s, name=%s, record_sets=%s, comment=%s", (zd['Id'].replace('/hostedzone/',''), zd['Name'], zd['ResourceRecordSetCount'], zd['Config']['Comment']))
+            comment = None
+            if "Comment" in zd['Config']:
+                comment = zd['Config']['Comment']
+            self.db.execute("replace into route53_zones set zone_id=%s, name=%s, record_sets=%s, comment=%s", (zd['Id'].replace('/hostedzone/',''), zd['Name'], zd['ResourceRecordSetCount'], comment))
             self.dbconn.commit()
             self.logger.debug(zd)
         # pp.pprint(zonesdata)
