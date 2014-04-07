@@ -54,6 +54,7 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument("--like", help="string to find within 'search-field'")
         hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
         hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
+        hlistparser.add_argument("-x", "--extended", help="Show extended information on hosts", action='store_true')
         hlistparser.set_defaults(func=self.command_host_list)
 
         addeditargs = argparse.ArgumentParser(add_help=False)
@@ -101,13 +102,17 @@ class InstanceManager(BaseManager):
             if not order_by:
                 order_by = ' order by availability_zone'
 
-        sql = "select host, instance_id, availability_zone, name, notes from hosts"
+        extended = ""
+        headers = ["Hostname", "instance_id", "availability_zone", "name", "notes"]
+        if args.extended:
+            extended = ", ip_internal, ip_external, hostname_internal, hostname_external"
+            headers = ["Hostname", "instance_id", "availability_zone", "name", "notes", "int ip", "ext ip", "int hostname", "ext hostname"]
+        sql = "select host, instance_id, availability_zone, name, notes{0} from hosts".format(extended)
         if len(whereclauses):
             sql += " where " + " and ".join(whereclauses)
         sql += order_by
         self.db.execute(sql)
         results = self.db.fetchall()
-        headers = ["Hostname", "instance_id", "availability_zone", "name", "notes"]
         self.output_formatted("Hosts", headers, results)
 
 
