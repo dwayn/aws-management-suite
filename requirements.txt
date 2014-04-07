@@ -1,4 +1,4 @@
-ssh
+paramiko
 mysql-python
 boto
 argparse
