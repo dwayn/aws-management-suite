@@ -146,7 +146,8 @@ class VolumeManager(BaseManager):
                 elif vol.attachment_state() in ('detaching', 'detached'):
                     raise VolumeNotAvailable("There was an error attaching {0} to {1}".format(vol.id, instance_id))
             time.sleep(5)
-
+        self.db.execute("INSERT INTO host_volumes set instance_id=%s, volume_group_id=%s, mount_point=NULL ON DUPLICATE KEY UPDATE mount_point=NULL", (instance_id, volume_group_id))
+        self.dbconn.commit()
         self.logger.info("Volumes attached")
 
 
@@ -544,7 +545,7 @@ class VolumeManager(BaseManager):
                 raise VolumeMountError("Error unmounting volume with command: {0}\n{1}".format(command, stderr))
             self.logger.info("Volume group {0} unmounted from host {1} ".format(volume_group_id, host))
         else:
-            self.logger.info("Volume group {0} is not mounted ".format(volume_group_id))
+            self.logger.warning("Volume group {0} is not mounted ".format(volume_group_id))
 
         self.db.execute("UPDATE host_volumes SET mount_point=%s WHERE instance_id=%s AND volume_group_id=%s", (None, instance_id, volume_group_id))
         self.dbconn.commit()
