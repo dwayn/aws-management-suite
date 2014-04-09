@@ -37,10 +37,10 @@ class InstanceManager(BaseManager):
                 self.db.execute("insert into hosts set instance_id=%s, host=%s, hostname_internal=%s, hostname_external=%s, "
                                 "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s on duplicate "
                                 "key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
-                                "instance_type=%s, availability_zone=%s, name=%s", (i.id, hn, hint, hext,
+                                "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s)", (i.id, hn, hint, hext,
                                                                             i.private_ip_address, i.ip_address, i.image_id, i.instance_type,
                                                                             i.placement, name, hint, hext, i.private_ip_address,
-                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name))
+                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name, hn))
                 self.dbconn.commit()
 
     def argument_parser_builder(self, parser):
