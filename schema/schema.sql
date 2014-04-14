@@ -40,7 +40,7 @@ CREATE TABLE `snapshot_groups` (
   `group_type` enum('raid','single') DEFAULT NULL,
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`snapshot_group_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
 
@@ -75,7 +75,7 @@ CREATE TABLE `deleted_snapshot_groups` (
   `group_type` enum('raid','single') DEFAULT NULL,
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`snapshot_group_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
 
@@ -107,7 +107,7 @@ CREATE TABLE `volume_groups` (
   `tags` varchar(100) DEFAULT NULL,
   `snapshot_group_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`volume_group_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
 
@@ -135,7 +135,7 @@ CREATE TABLE `deleted_volume_groups` (
   `tags` varchar(100) DEFAULT NULL,
   `snapshot_group_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`volume_group_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
 
