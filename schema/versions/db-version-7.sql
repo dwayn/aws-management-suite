@@ -11,7 +11,7 @@ CREATE TABLE `deleted_snapshot_groups` (
   `group_type` enum('raid','single') DEFAULT NULL,
   `tags` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`snapshot_group_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
 
 --
 
