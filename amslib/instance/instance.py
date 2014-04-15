@@ -11,6 +11,7 @@ class InstanceManager(BaseManager):
 
     def discover(self):
         regions = boto.ec2.regions()
+        instance_ids = []
         for region in regions:
             self.logger.info("Processing region".format(region.name))
             botoconn = self.__get_boto_conn(region.name)
@@ -20,6 +21,7 @@ class InstanceManager(BaseManager):
             except boto.exception.EC2ResponseError:
                 continue
             for i in instances:
+                instance_ids.append(i.id)
                 self.logger.info("Found instance {0}".format(i.id))
                 name = None
                 if 'Name' in i.tags:
@@ -43,6 +45,12 @@ class InstanceManager(BaseManager):
                                                                             i.ip_address, i.image_id, i.instance_type, i.placement, name, hn))
                 self.dbconn.commit()
 
+        self.db.execute("update hosts set `terminated`=0 where instance_id in ('{0}')".format("','".join(instance_ids)))
+        self.dbconn.commit()
+        self.db.execute("update hosts set `terminated`=1 where instance_id not in ('{0}')".format("','".join(instance_ids)))
+        self.dbconn.commit()
+
+
     def argument_parser_builder(self, parser):
 
         hsubparser = parser.add_subparsers(title="action", dest='action')
@@ -55,6 +63,7 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
         hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
         hlistparser.add_argument("-x", "--extended", help="Show extended information on hosts", action='store_true')
+        hlistparser.add_argument("-t", "--terminated", help="Include terminated instances (that have been added via discovery)", action='store_true')
         hlistparser.set_defaults(func=self.command_host_list)
 
         addeditargs = argparse.ArgumentParser(add_help=False)
@@ -101,12 +110,14 @@ class InstanceManager(BaseManager):
             whereclauses.append("availability_zone like '{0}%'".format(args.zone))
             if not order_by:
                 order_by = ' order by availability_zone'
+        if not args.terminated:
+            whereclauses.append("`terminated` = 0")
 
         extended = ""
         headers = ["Hostname", "instance_id", "availability_zone", "name", "notes"]
         if args.extended:
-            extended = ", ip_internal, ip_external, hostname_internal, hostname_external"
-            headers = ["Hostname", "instance_id", "availability_zone", "name", "notes", "int ip", "ext ip", "int hostname", "ext hostname"]
+            extended = ", case `terminated` when 0 then 'no' when 1 then 'yes' end, ip_internal, ip_external, hostname_internal, hostname_external"
+            headers = ["Hostname", "instance_id", "availability_zone", "name", "notes", "term", "int ip", "ext ip", "int hostname", "ext hostname"]
         sql = "select host, instance_id, availability_zone, name, notes{0} from hosts".format(extended)
         if len(whereclauses):
             sql += " where " + " and ".join(whereclauses)

@@ -22,6 +22,7 @@ CREATE TABLE `hosts` (
   `tags` varchar(100) DEFAULT NULL,
   `notes` varchar(255) DEFAULT NULL,
   `name` varchar(255) DEFAULT NULL,
+  `terminated` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`instance_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
