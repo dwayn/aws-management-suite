@@ -63,7 +63,8 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
         hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
         hlistparser.add_argument("-x", "--extended", help="Show extended information on hosts", action='store_true')
-        hlistparser.add_argument("-t", "--terminated", help="Include terminated instances (that have been added via discovery)", action='store_true')
+        hlistparser.add_argument("-a", "--all", help="Include terminated instances (that have been added via discovery)", action='store_true')
+        hlistparser.add_argument("-t", "--terminated", help="Show only terminated instances (that have been added via discovery)", action='store_true')
         hlistparser.set_defaults(func=self.command_host_list)
 
         addeditargs = argparse.ArgumentParser(add_help=False)
@@ -110,7 +111,12 @@ class InstanceManager(BaseManager):
             whereclauses.append("availability_zone like '{0}%'".format(args.zone))
             if not order_by:
                 order_by = ' order by availability_zone'
-        if not args.terminated:
+
+        if args.all:
+            pass
+        elif args.terminated:
+            whereclauses.append("`terminated` = 1")
+        else:
             whereclauses.append("`terminated` = 0")
 
         extended = ""
