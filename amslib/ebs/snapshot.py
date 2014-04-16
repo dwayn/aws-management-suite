@@ -111,12 +111,12 @@ class SnapshotManager(BaseManager):
             snapshotdata = self.get_snapshot_struct(snap.id, vol[1], vol[4], vol[0], region, vol[3], vol[2], None, vol[5], description)
             snapshots.append(snapshotdata)
 
-
         # check to see if any of the snaps errored out
         for vid in snaps.keys():
             snaps[vid].update()
             if snaps[vid].status == 'error':
-                raise SnapshotCreateError("There was an error creating snapshot {0} for volume_group_id: {1}".format(snaps[vid].id, volume_group_id))
+                # this shouldn't raise an error before restoring services that may have been disabled in the pre command
+                self.logger.error("There was an error creating snapshot {0} for volume_group_id: {1}".format(snaps[vid].id, volume_group_id))
 
         # store the metadata for the snapshot group
         self.store_snapshot_group(snapshots, volume_group_id, vgdata[3], vgdata[1], vgdata[2], vgdata[4], vgdata[6], expiry_date, vgdata[10], vgdata[8], vgdata[7])
@@ -131,6 +131,7 @@ class SnapshotManager(BaseManager):
                 stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr))
+
 
     def delete_snapshot_group(self, snapshot_group_id):
         self.db.execute("select region, snapshot_id from snapshot_groups sg join snapshots s using(snapshot_group_id) where snapshot_group_id=%s", (snapshot_group_id, ))

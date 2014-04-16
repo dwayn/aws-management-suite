@@ -8,7 +8,7 @@ CREATE TABLE `deleted_volume_groups` (
   `tags` varchar(100) DEFAULT NULL,
   `snapshot_group_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`volume_group_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --
 
