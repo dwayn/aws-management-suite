@@ -16,13 +16,15 @@ class HealthCheck(object):
             <IPAddress>%(ip_addr)s</IPAddress>
             <Port>%(port)s</Port>
             <Type>%(type)s</Type>
-            <ResourcePath>%(resource_path)s</ResourcePath>
+            %(resource_path)s
             %(fqdn_part)s
             %(string_match_part)s
             %(request_interval)s
             %(failure_threshold)s
         </HealthCheckConfig>
     """
+
+    XMLResourcePathPart = """<ResourcePath>%(resource_path)s</ResourcePath>"""
 
     XMLFQDNPart = """<FullyQualifiedDomainName>%(fqdn)s</FullyQualifiedDomainName>"""
 
@@ -91,7 +93,7 @@ class HealthCheck(object):
             'ip_addr': self.ip_addr,
             'port': self.port,
             'type': self.hc_type,
-            'resource_path': self.resource_path,
+            'resource_path': "",
             'fqdn_part': "",
             'string_match_part': "",
             'request_interval': (self.XMLRequestIntervalPart %
@@ -104,6 +106,9 @@ class HealthCheck(object):
 
         if self.string_match is not None:
             params['string_match_part'] = self.XMLStringMatchPart % {'string_match' : self.string_match}
+
+        if self.resource_path is not None:
+            params['resource_path'] = self.XMLResourcePathPart % {'resource_path' : self.resource_path}
 
         return self.POSTXMLBody % params
 
@@ -153,29 +158,15 @@ class Route53Manager(BaseManager):
     def discovery(self, prefer_hostname='external', interactive=False, load_route53_only=False):
         botoconn = self.__get_boto_conn()
         health_checks = botoconn.get_list_health_checks()
-        # type can be one of the following strings: HTTP | HTTPS | HTTP_STR_MATCH | HTTPS_STR_MATCH | TCP
+        ids = []
         for health_check in health_checks['ListHealthChecksResponse']['HealthChecks']:
-            resource_path = None
-            if 'ResourcePath' in health_check['HealthCheckConfig']:
-                resource_path = health_check['HealthCheckConfig']['ResourcePath']
-            search_string = None
-            if 'SearchString' in health_check['HealthCheckConfig']:
-                search_string = health_check['HealthCheckConfig']['SearchString']
-            fqdn = None
-            if 'FullyQualifiedDomainName' in health_check['HealthCheckConfig']:
-                fqdn = health_check['HealthCheckConfig']['FullyQualifiedDomainName']
+            hcid = self.store_healthcheck(health_check)
+            if hcid:
+                ids.append(hcid)
 
-            self.logger.info("Found health check: {0}://{1}:{2}".format(health_check['HealthCheckConfig']['Type'], health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port']))
-            self.db.execute("insert into route53_healthchecks set healthcheck_id=%s, ip=%s, port=%s, type=%s, request_interval=%s, "
-                            "failure_threshold=%s, resource_path=%s, search_string=%s, fqdn=%s, caller_reference=%s "
-                            "on duplicate key update ip=%s, port=%s, type=%s, request_interval=%s, failure_threshold=%s, "
-                            "resource_path=%s, search_string=%s, fqdn=%s, caller_reference=%s",
-                            (health_check['Id'], health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port'],
-                             health_check['HealthCheckConfig']['Type'], health_check['HealthCheckConfig']['RequestInterval'],
-                             health_check['HealthCheckConfig']['FailureThreshold'], resource_path, search_string, fqdn, health_check['CallerReference'],
-                             health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port'], health_check['HealthCheckConfig']['Type'],
-                             health_check['HealthCheckConfig']['RequestInterval'], health_check['HealthCheckConfig']['FailureThreshold'],
-                             resource_path, search_string, fqdn, health_check['CallerReference']))
+        #remove healthchecks that no longer exist in route53
+        if len(ids):
+            self.db.execute("delete from route53_healthchecks where id not in ( {0} )".format(",".join("{0}".format(n) for n in ids)))
             self.dbconn.commit()
 
         zonesdata = botoconn.get_all_hosted_zones()
@@ -198,7 +189,7 @@ class Route53Manager(BaseManager):
             zone_id = recs.hosted_zone_id
 
             # if identifier is set, then the record is one of WRR, latency or failover. WRR will include a value for weight,
-            #   latency will include a value for region, and failover will not include weight or region #TODO verify assumption on failover
+            #   latency will include a value for region, and failover will not include weight or region #TODO verify assumption on failover type
             for r in recs:
                 name = r.name
                 #TODO need to find out if i could ever get relative hostnames (rather than fqdn) back from this API call
@@ -247,6 +238,64 @@ class Route53Manager(BaseManager):
                     self.db.execute("update hosts set host=%s where instance_id=%s", (hostname, host[0]))
                     self.dbconn.commit()
 
+
+    def store_healthcheck(self, health_check):
+        resource_path = None
+        if 'ResourcePath' in health_check['HealthCheckConfig']:
+            resource_path = health_check['HealthCheckConfig']['ResourcePath']
+        search_string = None
+        if 'SearchString' in health_check['HealthCheckConfig']:
+            search_string = health_check['HealthCheckConfig']['SearchString']
+        fqdn = None
+        if 'FullyQualifiedDomainName' in health_check['HealthCheckConfig']:
+            fqdn = health_check['HealthCheckConfig']['FullyQualifiedDomainName']
+
+        self.logger.info("Storing health check: {0}://{1}:{2}".format(health_check['HealthCheckConfig']['Type'], health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port']))
+        self.db.execute("insert into route53_healthchecks set healthcheck_id=%s, ip=%s, port=%s, type=%s, request_interval=%s, "
+                        "failure_threshold=%s, resource_path=%s, search_string=%s, fqdn=%s, caller_reference=%s "
+                        "on duplicate key update ip=%s, port=%s, type=%s, request_interval=%s, failure_threshold=%s, "
+                        "resource_path=%s, search_string=%s, fqdn=%s, caller_reference=%s",
+                        (health_check['Id'], health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port'],
+                         health_check['HealthCheckConfig']['Type'], health_check['HealthCheckConfig']['RequestInterval'],
+                         health_check['HealthCheckConfig']['FailureThreshold'], resource_path, search_string, fqdn, health_check['CallerReference'],
+                         health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port'], health_check['HealthCheckConfig']['Type'],
+                         health_check['HealthCheckConfig']['RequestInterval'], health_check['HealthCheckConfig']['FailureThreshold'],
+                         resource_path, search_string, fqdn, health_check['CallerReference']))
+        self.dbconn.commit()
+        self.db.execute("select id from route53_healthchecks where healthcheck_id=%s", (health_check['Id'], ))
+        row = self.db.fetchone()
+        if not row:
+            return None
+        else:
+            return row[0]
+
+
+    def create_health_check(self, ip, port, protocol, request_interval=30, failure_threshold=3, resource_path=None, fqdn=None, string_match=None):
+        botoconn = self.__get_boto_conn()
+        if protocol == 'tcp':
+            hc_type = 'TCP'
+        elif protocol == 'http':
+            hc_type = 'HTTP'
+        elif protocol == 'https':
+            hc_type = 'HTTPS'
+
+        if string_match and hc_type in ('HTTP', 'HTTPS'):
+            hc_type += '_STR_MATCH'
+
+        hc = HealthCheck(ip, port, hc_type, resource_path, fqdn, string_match, request_interval, failure_threshold)
+        self.logger.debug(hc)
+        response = botoconn.create_health_check(hc)
+        #TODO need to find out what an error response looks like
+        hcid = None
+        if 'CreateHealthCheckResponse' in response:
+            if 'HealthCheck' in response['CreateHealthCheckResponse']:
+                hcid = self.store_healthcheck(response['CreateHealthCheckResponse']['HealthCheck'])
+
+        if hcid:
+            conf = response['CreateHealthCheckResponse']['HealthCheck']['HealthCheckConfig']
+            self.logger.info("Created healthcheck {0}: {1}://{2}:{3}".format(hcid, conf['Type'], conf['IPAddress'], conf['Port']))
+
+        return hcid
 
 
     def get_fqdn_for_host(self, host_or_ip):
@@ -321,9 +370,19 @@ class Route53Manager(BaseManager):
         healthparser = rsubparser.add_parser("healthchecks", help="Route53 healthcheck management operations")
         healthsubparser = healthparser.add_subparsers(title="operation", dest="operation")
         createhealthparser = healthsubparser.add_parser("create", help="Create a new health check")
-        createhealthparser.set_defaults(func=self.command_not_implemented)
+        createhealthparser.add_argument('ip', help='IP address to health check')
+        createhealthparser.add_argument('-p', '--port', type=int, help="Health check port", required=True)
+        createhealthparser.add_argument('-t', '--type', help="Health check type", choices=['tcp', 'http', 'https'])
+        createhealthparser.add_argument('-i', '--interval', type=int, help="Health check interval (10 or 30 second)", choices=[10,30], default=30)
+        createhealthparser.add_argument('-f', '--failure-threshold', type=int, help="Number of times health check fails before the host is marked down by Route53", choices=range(1, 11), default=3)
+        createhealthparser.add_argument('-a', '--resource-path', help="HTTP/HTTPS: health check resource path")
+        createhealthparser.add_argument('-d', '--fqdn', help="HTTP/HTTPS: health check fully qualified domain name")
+        createhealthparser.add_argument('-s', '--string-match', help="HTTP/HTTPS: health check response match string")
+        createhealthparser.set_defaults(func=self.command_create_healthcheck)
+
         updatehealthparser = healthsubparser.add_parser("update", help="Update a health check")
         updatehealthparser.set_defaults(func=self.command_not_implemented)
+
         deletehealthparser = healthsubparser.add_parser("delete", help="Delete a health check")
         deletehealthparser.set_defaults(func=self.command_not_implemented)
 
@@ -354,6 +413,9 @@ class Route53Manager(BaseManager):
             entry_value = cname_entry
 
         self.logger.error("Command not fully implemented: no action taken")
+
+    def command_create_healthcheck(self, args):
+        self.create_health_check(ip=args.ip, port=args.port, protocol=args.type, request_interval=args.interval, failure_threshold=args.failure_threshold, resource_path=args.resource_path, fqdn=args.fqdn, string_match=args.string_match)
 
     def command_create_dns(self, args):
 
