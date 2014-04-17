@@ -868,7 +868,9 @@ Arguments:
 
 #### `ams route53 dns create (fqdn) (record_type)`
 Create a raw DNS record in Route53. Note that currently this tool only supports single value DNS entries (ie. no support
-for multiple values in a single DNS record).
+for multiple values in a single DNS record). fqdn is the fully qualified domain name for the entry. You can include the trailing dot(.)
+or it will be added automatically. record_type is the dns record type. Currently only support values `a` or `cname` for A record or
+CNAME record respectively.
 
 Required arguments: fqdn, record_type, (--zone-id | --zone-name), --record-value
 
@@ -904,6 +906,8 @@ Arguments:
 #### `ams route53 dns add (fqdn) (record_type)`
 Create a DNS record for a running instance. Optionally you can also provide the parameters to create a health check for
 the DNS entry. This enables easily adding records for hosts using weighted, latency, and failover DNS configurations.
+fqdn is the fully qualified domain name for the entry. You can include the trailing dot(.) or it will be added automatically.
+record_type is the dns record type. Currently only support values `a` or `cname` for A record or CNAME record respectively.
 
 Required arguments: fqdn, record_type, (--zone-id | --zone-name), (--host | --instance)
 
@@ -956,7 +960,8 @@ Arguments:
 ----
 
 #### `ams route53 healthcheck create (ip) (port) (type)`
-Creates a health check in Route53 to be able to be used for weighted, latency and failover DNS entries.
+Creates a health check in Route53 to be able to be used for weighted, latency and failover DNS entries. ip should be a public
+ip address for the host, port is the port to health check and type is one of `tcp`, `http`, `https` for their respective health check types.
 
 Required arguments: ip, port, type
 

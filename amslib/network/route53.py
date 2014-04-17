@@ -566,7 +566,7 @@ class Route53Manager(BaseManager):
         listparser.set_defaults(func=self.command_list)
 
         adddnssharedargs = argparse.ArgumentParser(add_help=False)
-        adddnssharedargs.add_argument('fqdn', help="Fully qualified dns name for the entry. You can include the trailing dot(.) or it will be added automatically")
+        adddnssharedargs.add_argument('fqdn', help="Fully qualified domain name for the entry. You can include the trailing dot(.) or it will be added automatically")
         adddnssharedargs.add_argument('record_type', help="DNS record type (currently only support A and CNAME)", choices=['a', 'cname'])
         group = adddnssharedargs.add_mutually_exclusive_group(required=True)
         group.add_argument('--zone-id', help="Zone id to add DNS record to")
