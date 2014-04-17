@@ -30,7 +30,8 @@ class BaseManager:
             if x is not None:
                 return str(x)
             else:
-                return ""
+                # gives some value for output so that command line tools like cut and awk work more easily
+                return "---"
 
         if self.settings.human_output:
             print "\n\n{0}:".format(table_title)
@@ -53,3 +54,6 @@ class BaseManager:
             logging.basicConfig(level=globalloglevel)
             self.settings.logger.setLevel(level=amsloglevel)
         return self.settings.logger
+
+    def parse_region_from_availability_zone(self, availability_zone):
+        return availability_zone[0:len(availability_zone) - 1]

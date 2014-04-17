@@ -842,6 +842,138 @@ Arguments:
       --load-only           Only load the route53 tables, but do not apply
                             hostname changes to hosts
 
+#### `ams route53 list dns`
+Lists the DNS records that are currently in the database. You can run `ams route53 discovery` to synchronize the database
+with what is currently configured in Route53
+
+Arguments:
+
+----
+
+#### `ams route53 list zones`
+Lists the hosted zones that are currently in the database. You can run `ams route53 discovery` to synchronize the database
+with what is currently configured in Route53
+
+Arguments:
+
+----
+
+#### `ams route53 list healthchecks`
+Lists the Route53 health checks that are currently in the database. You can run `ams route53 discovery` to synchronize the
+database with what is currently configured in Route53
+
+Arguments:
+
+----
+
+#### `ams route53 dns create (fqdn) (record_type)`
+Create a raw DNS record in Route53. Note that currently this tool only supports single value DNS entries (ie. no support
+for multiple values in a single DNS record).
+
+Required arguments: fqdn, record_type, (--zone-id | --zone-name), --record-value
+
+Arguments:
+
+      --zone-id ZONE_ID     Zone id to add DNS record to
+      --zone-name ZONE_NAME
+                            Zone name to add DNS record to
+      -t TTL, --ttl TTL     TTL for the entry (default: 60)
+      -r {simple,weighted,latency,failover}, --routing-policy {simple,weighted,latency,failover}
+                            The routing policy to use (default: simple)
+      -w WEIGHT, --weight WEIGHT
+                            Weighted routing policy: weight to assign to the dns
+                            resource
+      --region REGION       Latency routing policy: assigns the region for the dns
+                            resource for routing
+      --health-check HEALTH_CHECK
+                            health check id to associate with the record (for IDs,
+                            use: ams route53 list healthchecks)
+      --failover-role {primary,secondary}
+                            Failover routing policy: defines whether resource is
+                            primary or secondary
+      -v RECORD_VALUE, --record-value RECORD_VALUE
+                            Value for the DNS record (Currently only has support
+                            single value entries)
+      --identifier IDENTIFIER
+                            Unique identifier to associate to a record that shares
+                            a name/type with other records in weighted, latency,
+                            or failover records
+
+----
+
+#### `ams route53 dns add (fqdn) (record_type)`
+Create a DNS record for a running instance. Optionally you can also provide the parameters to create a health check for
+the DNS entry. This enables easily adding records for hosts using weighted, latency, and failover DNS configurations.
+
+Required arguments: fqdn, record_type, (--zone-id | --zone-name), (--host | --instance)
+
+Arguments:
+
+      --zone-id ZONE_ID     Zone id to add DNS record to
+      --zone-name ZONE_NAME
+                            Zone name to add DNS record to
+      -t TTL, --ttl TTL     TTL for the entry (default: 60)
+      -r {simple,weighted,latency,failover}, --routing-policy {simple,weighted,latency,failover}
+                            The routing policy to use (default: simple)
+      -w WEIGHT, --weight WEIGHT
+                            Weighted routing policy: weight to assign to the dns
+                            resource
+      --region REGION       Latency routing policy: assigns the region for the dns
+                            resource for routing
+      --health-check HEALTH_CHECK
+                            health check id to associate with the record (for IDs,
+                            use: ams route53 list healthchecks)
+      --failover-role {primary,secondary}
+                            Failover routing policy: defines whether resource is
+                            primary or secondary
+      -H HOST, --host HOST  Hostname (to find current hostname use: ams host list)
+      -i INSTANCE, --instance INSTANCE
+                            Instance ID
+      --use {public,private}
+                            Define whether to use the public or private
+                            hostname/IP
+      --identifier IDENTIFIER
+                            Unique identifier to associate to a record that shares
+                            a name/type with other records in weighted, latency,
+                            or failover records. If not provided, one will be
+                            created from the hostname or instance id
+      --hc                  Create a Route53 health check for host
+      --hc-port HC_PORT     Health check port
+      --hc-type {tcp,http,https}
+                            Health check type
+      --hc-interval {10,30}
+                            Health check interval (10 or 30 second)
+      --hc-threshold {1,2,3,4,5,6,7,8,9,10}
+                            Number of times health check fails before the host is
+                            marked down by Route53
+      --hc-path HC_PATH     HTTP/HTTPS: health check resource path
+      --hc-fqdn HC_FQDN     HTTP/HTTPS: health check fully qualified domain name
+      --hc-match HC_MATCH   HTTP/HTTPS: health check response match string
+      --hc-ip HC_IP         IP address to use for the healthcheck. Default is to
+                            use the instance's external IP, but this argument can
+                            be used to override
+
+----
+
+#### `ams route53 healthcheck create (ip) (port) (type)`
+Creates a health check in Route53 to be able to be used for weighted, latency and failover DNS entries.
+
+Required arguments: ip, port, type
+
+Arguments:
+
+      -i {10,30}, --interval {10,30}
+                            Health check interval (10 or 30 second)
+      -f {1,2,3,4,5,6,7,8,9,10}, --failure-threshold {1,2,3,4,5,6,7,8,9,10}
+                            Number of times health check fails before the host is
+                            marked down by Route53
+      -a RESOURCE_PATH, --resource-path RESOURCE_PATH
+                            HTTP/HTTPS: health check resource path
+      -d FQDN, --fqdn FQDN  HTTP/HTTPS: health check fully qualified domain name
+      -s STRING_MATCH, --string-match STRING_MATCH
+                            HTTP/HTTPS: health check response match string
+
+----
 
 ## Internals
 #### `ams internals database install`

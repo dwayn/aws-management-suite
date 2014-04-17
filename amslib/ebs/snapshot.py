@@ -67,7 +67,7 @@ class SnapshotManager(BaseManager):
         if not vgdata:
             raise VolumeGroupNotFound("Volume group {0} not found".format(volume_group_id))
 
-        region = vgdata[9][0:len(vgdata[9]) - 1]
+        region = self.parse_region_from_availability_zone(vgdata[9])
         botoconn = self.__get_boto_conn(region)
 
         self.db.execute("select volume_id, size, piops, block_device, raid_device_id, tags from volumes where volume_group_id=%s", (volume_group_id, ))
@@ -231,7 +231,7 @@ class SnapshotManager(BaseManager):
     # TODO find out if growing the volumes will cause issues with the software raid
     def clone_snapshot_group(self, snapshot_group_id, availability_zone, piops=None, instance_id=None, mount_point=None, automount=True):
         original_snapshot_group_id = None
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
         botoconn = self.__get_boto_conn(region)
         self.db.execute("select "
                           "snapshot_id, "

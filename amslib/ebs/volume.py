@@ -32,7 +32,7 @@ class VolumeManager(BaseManager):
 
 
         availability_zone, host = data
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
         botoconn = self.__get_boto_conn(region)
         instance = botoconn.get_only_instances([instance_id])[0]
         block_devices_in_use = []
@@ -86,7 +86,7 @@ class VolumeManager(BaseManager):
             raise VolumeGroupNotFound("Metadata not found for volume_group_id: {0}".format(volume_group_id))
 
         availability_zone = data[0][1]
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
         botoconn = self.__get_boto_conn(region)
         vol_ids = []
         volumes = {}
@@ -160,7 +160,7 @@ class VolumeManager(BaseManager):
         if not data:
             raise InstanceNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
         availability_zone, host = data
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
 
         self.db.execute("select "
                           "vg.raid_level, "
@@ -281,7 +281,7 @@ class VolumeManager(BaseManager):
             raise VolumeGroupNotFound("Instance {0} not found; unable to lookup availability zone or host for instance".format(instance_id))
 
         cur_mount_point, host, availability_zone, block_device, volume_group_type, fs_type = data
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
 
         sh = SSHManager()
         sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
@@ -591,7 +591,7 @@ class VolumeManager(BaseManager):
         for d in voldata:
             volids.append(d[7])
 
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
         botoconn = self.__get_boto_conn(region)
         vols = botoconn.get_all_volumes(volids)
 
@@ -641,7 +641,7 @@ class VolumeManager(BaseManager):
         for d in voldata:
             volids.append(d[5])
 
-        region = availability_zone[0:len(availability_zone) - 1]
+        region = self.parse_region_from_availability_zone(availability_zone)
         botoconn = self.__get_boto_conn(region)
         vols = botoconn.get_all_volumes(volids)
 
