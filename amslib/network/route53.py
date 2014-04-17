@@ -313,36 +313,8 @@ class Route53Manager(BaseManager):
             # related pull requests:
             # https://github.com/boto/boto/pull/2195
             # https://github.com/boto/boto/pull/2222
-            def boto_route53_record_Record_endElement(self, name, value, connection):
-                if name == 'Name':
-                    self.name = value
-                elif name == 'Type':
-                    self.type = value
-                elif name == 'TTL':
-                    self.ttl = value
-                elif name == 'Value':
-                    self.resource_records.append(value)
-                elif name == 'HostedZoneId':
-                    self.alias_hosted_zone_id = value
-                elif name == 'DNSName':
-                    self.alias_dns_name = value
-                elif name == 'SetIdentifier':
-                    self.identifier = value
-                elif name == 'EvaluateTargetHealth':
-                    self.alias_evaluate_target_health = value
-                elif name == 'Weight':
-                    self.weight = value
-                elif name == 'Region':
-                    self.region = value
-                # following 2 add support for parsing health check id
-                elif name == 'HealthCheckId':
-                    self.health_check = value
-                # following 2 lines add support for parsing the failover role
-                elif name == 'Failover':
-                    self.failover_role = value
 
-
-            boto.route53.record.Record.endElement = boto_route53_record_Record_endElement
+            boto.route53.record.Record = Record
             ################-------------END MONKEYPATCH-------------#####################
         return self.boto_conns["route53"]
 
