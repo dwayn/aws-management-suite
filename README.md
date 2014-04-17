@@ -43,9 +43,9 @@ Instance Management
 Route53
 * Discovery has been implemented to synchronize the local database with the current state of Route53 DNS records and health checks
 * create raw DNS record
-* create DNS record for a specific host without explicitly defining a number of the parameters that are on the host (optionally also configure a health check for the record)
+* create DNS record for a specific host without explicitly defining a number of the parameters that are on the host (optionally also configure a Route53 health check for the host)
 * create Route53 health checks
-* support for managing Weighted Round Robin, Failover, and Latency routing policies in Route53 records
+* support for managing Simple, Weighted Round Robin, Failover, and Latency routing policies in Route53 records
 * delete DNS record
 
 ## Setup and Configuration
