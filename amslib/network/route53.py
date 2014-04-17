@@ -549,6 +549,47 @@ class Route53Manager(BaseManager):
         name = row[0]
         return name
 
+    def delete_dns_record(self, zone_id, fqdn, record_type, identifier=None):
+        # normalize values
+        record_type = record_type.upper()
+        fqdn = fqdn.lower()
+        if fqdn[len(fqdn)-1] != '.':
+            fqdn += '.'
+
+        botoconn = self.__get_boto_conn()
+
+        zones = botoconn.get_zones()
+        zone = None
+        # unfortunately boto's get_zone only takes a zone name which is not necessarily unique :(
+        for z in zones:
+            if z.id == zone_id:
+                zone = z
+                break
+        if not zone:
+            raise ResourceNotFound("Zone ID {0} not found".format(zone_id))
+
+        rrset = zone.get_records()
+        record = None
+        for r in rrset:
+            if r.name == fqdn and r.type == record_type and r.identifier == identifier:
+                record = r
+                break
+        if not record:
+            raise ResourceNotFound("Cannot find DNS record for {0} {1} {2} {3}", format(zone_id, fqdn, record_type, identifier))
+
+        rrset.add_change_record('DELETE', record)
+        response = rrset.commit()
+        if 'ChangeResourceRecordSetsResponse' in response:
+            name = record.name
+            if name[len(name)-1] == '.':
+                name = name[0:len(name)-1]
+            if not identifier:
+                identifier = ""
+            self.db.execute("delete from route53_records where zone_id=%s and name=%s and type=%s and identifier=%s", (zone_id, fqdn, record_type, identifier))
+            self.dbconn.commit()
+            self.logger.info("Deleted DNS record for {0} {1} {2} {3}".format(zone_id, fqdn, record_type, identifier))
+            self.db.execute("update route53_zones z set record_sets = (select count(*) from route53_records where zone_id=z.zone_id)")
+            self.dbconn.commit()
 
 
     def argument_parser_builder(self, parser):
@@ -611,7 +652,13 @@ class Route53Manager(BaseManager):
         updatednsparser.set_defaults(func=self.command_not_implemented)
         # ams route53 dns delete
         deletednsparser = dnssubparser.add_parser("delete", help="Delete a DNS entry")
-        deletednsparser.set_defaults(func=self.command_not_implemented)
+        deletednsparser.set_defaults(func=self.command_delete_dns)
+        deletednsparser.add_argument('fqdn', help="Fully qualified domain name for the entry. You can include the trailing dot(.) or it will be added automatically")
+        deletednsparser.add_argument('record_type', help="DNS record type (currently only support A and CNAME)", choices=['a', 'cname'])
+        deletednsparser.add_argument('--identifier', help="Unique identifier for a record that shares a name/type with other records in weighted, latency, or failover records")
+        group = deletednsparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--zone-id', help="Zone id to add DNS record to")
+        group.add_argument('--zone-name', help="Zone name to add DNS record to")
 
 
         # ams route53 healthchecks
@@ -636,6 +683,28 @@ class Route53Manager(BaseManager):
         # ams route53 healthchecks delete
         deletehealthparser = healthsubparser.add_parser("delete", help="Delete a health check")
         deletehealthparser.set_defaults(func=self.command_not_implemented)
+
+    def command_delete_dns(self, args):
+        zone_id = None
+        zone_name = None
+        if args.zone_id:
+            whereclause = 'zone_id=%s'
+            wherevar = args.zone_id
+        if args.zone_name:
+            whereclause = 'name=%s'
+            wherevar = args.zone_name
+        self.db.execute("select zone_id, name from route53_zones where " + whereclause, (wherevar, ))
+        rows = self.db.fetchall()
+        if not rows:
+            self.logger.error("No Route53 zone ID found")
+            return
+        elif len(rows) > 1:
+            self.logger.error("Multiple zones found for zone name: {0}. Use --zone-id instead".format(args.zone_name))
+            return
+        else:
+            zone_name = rows[0][1]
+            zone_id = rows[0][0]
+        self.delete_dns_record(zone_id=zone_id, fqdn=args.fqdn, record_type=args.record_type, identifier=args.identifier)
 
     def command_add_dns(self, args):
         if args.host:

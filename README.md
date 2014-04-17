@@ -959,6 +959,25 @@ Arguments:
 
 ----
 
+#### `ams route53 dns delete (fqdn) (record_type)`
+Delete a DNS record in Route53. fqdn is the fully qualified domain name for the entry. You can include the trailing dot(.)
+or it will be added automatically. record_type is the dns record type. Currently only support values `a` or `cname` for A record or
+CNAME record respectively.
+
+Required arguments: fqdn, record_type, (--zone-id | --zone-name)
+
+Arguments:
+
+      --identifier IDENTIFIER
+                            Unique identifier for a record that shares a name/type
+                            with other records in weighted, latency, or failover
+                            records
+      --zone-id ZONE_ID     Zone id to add DNS record to
+      --zone-name ZONE_NAME
+                            Zone name to add DNS record to
+
+----
+
 #### `ams route53 healthcheck create (ip) (port) (type)`
 Creates a health check in Route53 to be able to be used for weighted, latency and failover DNS entries. ip should be a public
 ip address for the host, port is the port to health check and type is one of `tcp`, `http`, `https` for their respective health check types.
