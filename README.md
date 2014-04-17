@@ -27,7 +27,6 @@ EBS Volumes (managed as groups of volumes)
 * mount volume/raid
 * unmount volume/raid
 
-
 EBS Snapshots (managed as groups of snapshots)
 * pre/post snapshot hooks to enable running commands/scripts on target host before and after starting snapshot to ensure consistent point in time snapshot of all volumes in a raid group
 * copy snapshot group to another region (only handled internally currently)
@@ -40,6 +39,14 @@ EBS Snapshots (managed as groups of snapshots)
 Instance Management
 * Instances can be manually added or edited using `ams host add` or `ams host edit` respectively
 * Instance discovery has been implemented, allowing the hosts table to be automatically populated
+
+Route53
+* Discovery has been implemented to synchronize the local database with the current state of Route53 DNS records and health checks
+* create raw DNS record
+* create DNS record for a specific host without explicitly defining a number of the parameters that are on the host (optionally also configure a health check for the record)
+* create Route53 health checks
+* support for managing Weighted Round Robin, Failover, and Latency routing policies in Route53 records
+* delete DNS record
 
 ## Setup and Configuration
 ### Initial installation
