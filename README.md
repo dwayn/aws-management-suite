@@ -4,10 +4,10 @@ aws-management-suite
 Source URL: https://github.com/dwayn/aws-management-suite
 
 # Introduction
-This is currently very much a work in progress, and there is much that will be cleaned up over time. The goal of this suite is to
-abstract many of the common tasks related to managing cloud infrastructure in AWS. The primary goal of this tool is to bridge the gap
+This is currently very much a work in progress, and there is much that will be cleaned up and added over time. The goal of this suite is to
+abstract many of the common tasks related to managing cloud infrastructure in AWS and bridge the gap
 between raw infrastructure management tools like the EC2 command line tools, and configuration management tools. Initially, this tool
-is focused on EBS volume, raid and snapshot management, but going forward the goal is to cover other infrastructure management needs
+is focused on EBS volume, raid and snapshot management of single and raid volumes, but going forward the goal is to cover other infrastructure management needs
 that are not fully addressed by other tools.
 
 ## Current Features
