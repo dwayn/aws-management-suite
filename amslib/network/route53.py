@@ -591,6 +591,23 @@ class Route53Manager(BaseManager):
             self.db.execute("update route53_zones z set record_sets = (select count(*) from route53_records where zone_id=z.zone_id)")
             self.dbconn.commit()
 
+    def delete_healthcheck(self, healthcheck_id, force=False):
+        self.db.execute("select h.healthcheck_id, r.healthcheck_id, r.name, r.zone_id from route53_healthchecks h left join route53_records r on h.healthcheck_id=r.healthcheck_id where id=%s", (healthcheck_id, ))
+        row = self.db.fetchone()
+        if not row:
+            raise ResourceNotFound("Health check {0} not found".format(healthcheck_id))
+
+        if row[1] is not None and not force:
+            raise ResourceNotAvailable("Health check {0} is currently in use for a dns entry in zone {1} with FQDN of {2}".format(healthcheck_id, row[3], row[2]))
+
+        botoconn = self.__get_boto_conn()
+        response = botoconn.delete_health_check(row[0])
+
+        if 'DeleteHealthCheckResponse' in response:
+            self.db.execute("delete from route53_healthchecks where id=%s", (healthcheck_id, ))
+            self.dbconn.commit()
+            self.logger.info("Deleted health check {0} ({1})".format(healthcheck_id, row[0]))
+
 
     def argument_parser_builder(self, parser):
         rsubparser = parser.add_subparsers(title="action", dest='action')
@@ -682,7 +699,12 @@ class Route53Manager(BaseManager):
         updatehealthparser.set_defaults(func=self.command_not_implemented)
         # ams route53 healthchecks delete
         deletehealthparser = healthsubparser.add_parser("delete", help="Delete a health check")
-        deletehealthparser.set_defaults(func=self.command_not_implemented)
+        deletehealthparser.add_argument('healthcheck_id', type=int, help='ID of the health check to delete. To list health check ID run: ams route53 list healthchecks')
+        deletehealthparser.add_argument('--force', action='store_true', help="Force the deletion of a health check even if it is still defined as the health check for a record")
+        deletehealthparser.set_defaults(func=self.command_delete_healthcheck)
+
+    def command_delete_healthcheck(self, args):
+        self.delete_healthcheck(args.healthcheck_id, args.force)
 
     def command_delete_dns(self, args):
         zone_id = None

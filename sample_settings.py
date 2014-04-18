@@ -43,3 +43,6 @@ SSH_KEYFILE = None if not SSH_KEYFILE else os.path.expanduser(SSH_KEYFILE)
 AMS_LOGLEVEL = 'INFO'
 # set the log level for all modules using logging module
 GLOBAL_LOGLEVEL = 'CRITICAL'
+
+# rethrows globally caught error rather than just logging a critical error
+THROW_ERRORS = False

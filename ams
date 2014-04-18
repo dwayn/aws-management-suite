@@ -6,6 +6,7 @@ import MySQLdb
 import settings
 import inspect
 import os
+import logging
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
@@ -88,6 +89,7 @@ def upgrade_db(args):
 
 
 def main():
+    logger = logging.getLogger('ams')
     parser = argparse.ArgumentParser(prog="ams")
     parser.add_argument("-q", "--scriptable-output", action='store_true', help="removes human readability formatting for scripting purposes")
 
@@ -122,11 +124,15 @@ def main():
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
-    # print args
+
     if args.scriptable_output:
         settings.human_output = False
-    #dispatch(args)
-    args.func(args)
+    try:
+        args.func(args)
+    except Exception as e:
+        logger.critical(e.__class__.__name__ + ": " + str(e))
+        if getattr(settings, 'THROW_ERRORS', False):
+            raise
 
 
 if __name__ == "__main__":

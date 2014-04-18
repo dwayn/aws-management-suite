@@ -12,4 +12,7 @@ class ResourceNotFound(NetworkManagerError):
 class Route53Error(NetworkManagerError):
     pass
 
+class ResourceNotAvailable(NetworkManagerError):
+    pass
+
 
