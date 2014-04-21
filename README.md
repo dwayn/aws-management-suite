@@ -50,7 +50,7 @@ Route53
 
 ## Setup and Configuration
 ### Initial installation
-* This tool may work on systems with python 2.5, but to date has only been tested on 2.6.6 and 2.7.6 and should run on any 2.6.x or 2.7.x version (3.x compatibility is unknown). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
+* This tool will only work on systems with python 2.6+ (due to paramiko requirements), but to date has only been tested on 2.6.6 and 2.7.6 but should run on any 2.6.x or 2.7.x version (3.x compatibility is unknown). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
 * The tool requires ssh and sudo access to hosts in order to accomplish tasks like mounting volumes and running system commands to start/stop services (for snapshots)
 * Copy sample_settings.py to settings.py and edit AWS, SSH and SUDO access credentials
 * A MySQL database needs to be setup for tracking state. The following statements assume that the mysql database and the tool are located on the same host:
