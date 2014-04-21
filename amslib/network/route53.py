@@ -443,12 +443,20 @@ class Route53Manager(BaseManager):
 
     def create_health_check(self, ip, port, protocol, request_interval=30, failure_threshold=3, resource_path=None, fqdn=None, string_match=None):
         botoconn = self.__get_boto_conn()
+        hc_type = None
         if protocol == 'tcp':
             hc_type = 'TCP'
         elif protocol == 'http':
             hc_type = 'HTTP'
         elif protocol == 'https':
             hc_type = 'HTTPS'
+
+        if not hc_type:
+            raise AttributeError("Protocol must be one of [tcp, http, https]")
+        if not ip:
+            raise AttributeError("ip must be provided for healthcheck")
+        if not port:
+            raise AttributeError("port must be provided for healthcheck")
 
         if string_match and hc_type in ('HTTP', 'HTTPS'):
             hc_type += '_STR_MATCH'
@@ -578,18 +586,22 @@ class Route53Manager(BaseManager):
             raise ResourceNotFound("Cannot find DNS record for {0} {1} {2} {3}", format(zone_id, fqdn, record_type, identifier))
 
         rrset.add_change_record('DELETE', record)
+
+        # for some reason, a properly formed response is not being returned, but the record is deleted from route53
+        # adding the response to the debug log for now to keep an eye on it
         response = rrset.commit()
-        if 'ChangeResourceRecordSetsResponse' in response:
-            name = record.name
-            if name[len(name)-1] == '.':
-                name = name[0:len(name)-1]
-            if not identifier:
-                identifier = ""
-            self.db.execute("delete from route53_records where zone_id=%s and name=%s and type=%s and identifier=%s", (zone_id, fqdn, record_type, identifier))
-            self.dbconn.commit()
-            self.logger.info("Deleted DNS record for {0} {1} {2} {3}".format(zone_id, fqdn, record_type, identifier))
-            self.db.execute("update route53_zones z set record_sets = (select count(*) from route53_records where zone_id=z.zone_id)")
-            self.dbconn.commit()
+        self.logger.debug(response)
+        #if 'ChangeResourceRecordSetsResponse' in response:
+        name = record.name
+        if name[len(name)-1] == '.':
+            name = name[0:len(name)-1]
+        if not identifier:
+            identifier = ""
+        self.db.execute("delete from route53_records where zone_id=%s and name=%s and type=%s and identifier=%s", (zone_id, fqdn, record_type, identifier))
+        self.dbconn.commit()
+        self.logger.info("Deleted DNS record for {0} {1} {2} {3}".format(zone_id, fqdn, record_type, identifier))
+        self.db.execute("update route53_zones z set record_sets = (select count(*) from route53_records where zone_id=z.zone_id)")
+        self.dbconn.commit()
 
     def delete_healthcheck(self, healthcheck_id, force=False):
         self.db.execute("select h.healthcheck_id, r.healthcheck_id, r.name, r.zone_id from route53_healthchecks h left join route53_records r on h.healthcheck_id=r.healthcheck_id where id=%s", (healthcheck_id, ))
@@ -625,7 +637,7 @@ class Route53Manager(BaseManager):
 
         adddnssharedargs = argparse.ArgumentParser(add_help=False)
         adddnssharedargs.add_argument('fqdn', help="Fully qualified domain name for the entry. You can include the trailing dot(.) or it will be added automatically")
-        adddnssharedargs.add_argument('record_type', help="DNS record type (currently only support A and CNAME)", choices=['a', 'cname'])
+        adddnssharedargs.add_argument('record_type', help="DNS record type (currently only support A and CNAME)", choices=['A', 'CNAME'])
         group = adddnssharedargs.add_mutually_exclusive_group(required=True)
         group.add_argument('--zone-id', help="Zone id to add DNS record to")
         group.add_argument('--zone-name', help="Zone name to add DNS record to")
@@ -671,7 +683,7 @@ class Route53Manager(BaseManager):
         deletednsparser = dnssubparser.add_parser("delete", help="Delete a DNS entry")
         deletednsparser.set_defaults(func=self.command_delete_dns)
         deletednsparser.add_argument('fqdn', help="Fully qualified domain name for the entry. You can include the trailing dot(.) or it will be added automatically")
-        deletednsparser.add_argument('record_type', help="DNS record type (currently only support A and CNAME)", choices=['a', 'cname'])
+        deletednsparser.add_argument('record_type', help="DNS record type (currently only support A and CNAME)", choices=['A', 'CNAME'])
         deletednsparser.add_argument('--identifier', help="Unique identifier for a record that shares a name/type with other records in weighted, latency, or failover records")
         group = deletednsparser.add_mutually_exclusive_group(required=True)
         group.add_argument('--zone-id', help="Zone id to add DNS record to")
@@ -749,12 +761,12 @@ class Route53Manager(BaseManager):
             cname_entry = row[2]
             ip_entry = row[4]
 
-        if args.record_type == 'a':
+        if args.record_type == 'A':
             entry_value = ip_entry
             if not entry_value:
                 self.logger.error("No {0} ip address on instance to use for A record".format(args.use))
                 return
-        elif args.record_type == 'cname':
+        elif args.record_type == 'CNAME':
             entry_value = cname_entry
             if not entry_value:
                 self.logger.error("No {0} dns name on instance to use for CNAME record".format(args.use))
@@ -793,7 +805,7 @@ class Route53Manager(BaseManager):
             args.region = self.parse_region_from_availability_zone(row[6])
 
         if healthcheck_id:
-            args.health_check=healthcheck_id
+            args.health_check = healthcheck_id
 
         args.record_value = entry_value
 
