@@ -209,12 +209,12 @@ class VolumeManager(BaseManager):
             if new_raid:
                 raid_level = voldata[0][0]
                 stripe_block_size = voldata[0][1]
-                command = 'mdadm --create {0} --level={1} --chunk={2} --raid-devices={3} {4}'.format(block_device, raid_level, stripe_block_size, devcount, devlist)
+                command = '/sbin/mdadm --create {0} --level={1} --chunk={2} --raid-devices={3} {4}'.format(block_device, raid_level, stripe_block_size, devcount, devlist)
                 stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
-                command = 'mkfs.{0} {1}'.format(fs_type, block_device)
+                command = '/sbin/mkfs.{0} {1}'.format(fs_type, block_device)
                 stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
@@ -235,7 +235,7 @@ class VolumeManager(BaseManager):
                     time.sleep(10)
                     block_device = '/dev/' + dev_found
                 else:
-                    command = 'mdadm --assemble {0} {1}'.format(block_device, devlist)
+                    command = '/sbin/mdadm --assemble {0} {1}'.format(block_device, devlist)
                     stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
                     if int(exit_code) != 0:
                         raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
@@ -243,7 +243,7 @@ class VolumeManager(BaseManager):
         else:
             block_device = voldata[0][5]
             if new_raid:
-                command = 'mkfs.{0} {1}'.format(fs_type, block_device)
+                command = '/sbin/mkfs.{0} {1}'.format(fs_type, block_device)
                 stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
@@ -418,7 +418,7 @@ class VolumeManager(BaseManager):
             conf = stdout.split("\n")
             if not remove:
                 self.logger.info("Reading current mdadm devices")
-                stdout, stderr, exit_code = sh.sudo("mdadm --detail --scan ", sudo_password=self.settings.SUDO_PASSWORD)
+                stdout, stderr, exit_code = sh.sudo("/sbin/mdadm --detail --scan ", sudo_password=self.settings.SUDO_PASSWORD)
                 scan = stdout.split("\n")
 
                 mdadm_line = None
@@ -582,7 +582,7 @@ class VolumeManager(BaseManager):
         if volume_type == 'raid' and host:
             sh = SSHManager()
             sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
-            command = 'mdadm --stop {0}'.format(block_device)
+            command = '/sbin/mdadm --stop {0}'.format(block_device)
             stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:
                 raise VolumeMountError("Error stopping the software raid on volume group {0} with command: {1}\n{2}".format(volume_group_id, command, stderr))
