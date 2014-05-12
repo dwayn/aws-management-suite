@@ -207,7 +207,7 @@ CREATE TABLE `route53_records` (
   `alias_dns_name` VARCHAR(255) DEFAULT NULL,
   `weight` INT DEFAULT NULL,
   `region` VARCHAR(20) DEFAULT NULL,
-  `healthcheck_id` VARCHAR (50) DEFAULT NULL
+  `healthcheck_id` VARCHAR (50) DEFAULT NULL,
   PRIMARY KEY (`zone_id`, `name`, `type`, `identifier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
