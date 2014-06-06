@@ -157,7 +157,8 @@ Arguments:
 ----
 
 #### `ams host edit`
-Edit a host's details in the database, particularly useful for editing the hostname which does not get overwritten on discovery passes.
+Edit a host's details in the database, particularly useful for editing the hostname which does not get overwritten on discovery passes. Also provides
+the option --configure-hostname which will ssh to the host and set the system hostname to the hostname that you have configured
 
 Required arguments: --instance
 
@@ -165,10 +166,6 @@ Arguments:
 
       -i INSTANCE, --instance INSTANCE
                             Instance ID of the instance to add
-      -H HOSTNAME, --hostname HOSTNAME
-                            hostname of the host (used to ssh to the host to do
-                            management)
-      -z ZONE, --zone ZONE  availability zone that the instance is in
       --hostname-internal HOSTNAME_INTERNAL
                             internal hostname (stored but not currently used)
       --hostname-external HOSTNAME_EXTERNAL
@@ -182,6 +179,13 @@ Arguments:
                             Instance type (stored but not currently used)
       --notes NOTES         Notes on the instance/host (stored but not currently
                             used)
+      --name NAME           Name of the host (should match the 'Name' tag in EC2
+                            for the instance)
+      -H HOSTNAME, --hostname HOSTNAME
+                            hostname of the host (used to ssh to the host to do
+                            management)
+      --configure-hostname  Set the hostname on the host to the FQDN that is
+                            currently the hostname for the instance in AMS
       -z ZONE, --zone ZONE  availability zone that the instance is in
 
 ----
@@ -948,21 +952,14 @@ Arguments:
                             a name/type with other records in weighted, latency,
                             or failover records. If not provided, one will be
                             created from the hostname or instance id
-      --hc                  Create a Route53 health check for host
-      --hc-port HC_PORT     Health check port
-      --hc-type {tcp,http,https}
-                            Health check type
-      --hc-interval {10,30}
-                            Health check interval (10 or 30 second)
-      --hc-threshold {1,2,3,4,5,6,7,8,9,10}
-                            Number of times health check fails before the host is
-                            marked down by Route53
-      --hc-path HC_PATH     HTTP/HTTPS: health check resource path
-      --hc-fqdn HC_FQDN     HTTP/HTTPS: health check fully qualified domain name
-      --hc-match HC_MATCH   HTTP/HTTPS: health check response match string
-      --hc-ip HC_IP         IP address to use for the healthcheck. Default is to
-                            use the instance's external IP, but this argument can
-                            be used to override
+      --update-hosts        (routing_policy=simple only) Updates the hostname for
+                            the host in the AMS hosts table (saving you from
+                            having to run route53 discovery to update)
+      --configure-hostname  (routing_policy=simple only) Set the hostname on the
+                            host to the FQDN that was just added to the host. Also
+                            applies the --update-hosts option (for Ubuntu and
+                            Redhat flavors, it will also edit the proper files to
+                            make this change permanent)
 
 ----
 

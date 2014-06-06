@@ -1,6 +1,8 @@
 import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
+from amslib.ssh.sshmanager import SSHManager
+import time
 
 class InstanceManager(BaseManager):
 
@@ -51,6 +53,64 @@ class InstanceManager(BaseManager):
         self.dbconn.commit()
 
 
+    def configure_hostname(self, instance_id, hostname, configure_server=False):
+        self.db.execute("select instance_id, hostname_external, hostname_internal from hosts where host=%s",(hostname, ))
+        rows = self.db.fetchall()
+        if rows:
+            for row in rows:
+                hn = None
+                if row[2]:
+                    hn = row[2]
+                if row[1]:
+                    hn = row[1]
+
+                self.db.execute("update hosts set host=%s where instance_id=%s", (hn, row[0]))
+                self.dbconn.commit()
+        self.db.execute("update hosts set host=%s where instance_id=%s", (hostname, instance_id))
+        self.dbconn.commit()
+
+        sh = SSHManager()
+        sh.connect(hostname=hostname, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+
+        self.logger.info("Setting the running value for hostname on the instance")
+        stdout, stderr, exit_code = sh.sudo('hostname {0}'.format(hostname), sudo_password=self.settings.SUDO_PASSWORD)
+        if int(exit_code) != 0:
+            self.logger.error("There was an error setting the running hostname of the instance\n" + stderr)
+            return
+
+        permanent = False
+        # Redhat/CentOS uses a "HOSTNAME=somehost.example.com" line in /etc/sysconfig/network to set hostname permanently
+        stdout, stderr, exit_code = sh.sudo('cat /etc/sysconfig/network', sudo_password=self.settings.SUDO_PASSWORD)
+        if int(exit_code) == 0:
+            self.logger.info("/etc/sysconfig/network file found, modifying HOSTNAME")
+            hoststring = "HOSTNAME={0}".format(hostname)
+            lines = stdout.strip().split("\n")
+            found = False
+            for i in range(0, len(lines)):
+                if lines[i][0:8] == 'HOSTNAME':
+                    lines[i] = hoststring
+                    found=True
+                    break
+            if not found:
+                lines.append(hoststring)
+
+            sh.sudo('mv -f /etc/sysconfig/network /etc/sysconfig/network.prev', sudo_password=self.settings.SUDO_PASSWORD)
+            for line in lines:
+                sh.sudo('echo {0} >> /etc/sysconfig/network'.format(line), sudo_password=self.settings.SUDO_PASSWORD)
+            permanent = True
+
+        # Ubuntu uses "somehost.example.com" as the contents of /etc/hostname to set hostname permanently
+        stdout, stderr, exit_code = sh.sudo('cat /etc/hostname', sudo_password=self.settings.SUDO_PASSWORD)
+        if int(exit_code) == 0:
+            self.logger.info("/etc/hostname file found, setting hostname")
+            sh.sudo('cp /etc/hostname /etc/hostname.prev', sudo_password=self.settings.SUDO_PASSWORD)
+            sh.sudo('echo {0} > /etc/hostname'.format(hostname), sudo_password=self.settings.SUDO_PASSWORD)
+            permanent = True
+
+        if permanent:
+            self.logger.info("Hostname configured permanently on instance")
+
+
     def argument_parser_builder(self, parser):
 
         hsubparser = parser.add_subparsers(title="action", dest='action')
@@ -87,6 +147,7 @@ class InstanceManager(BaseManager):
         # ams host edit
         heditparser = hsubparser.add_parser("edit", help="Edit host details in the database. Values can be passed as an empty string ('') to nullify them", parents=[addeditargs])
         heditparser.add_argument('-H', '--hostname', help="hostname of the host (used to ssh to the host to do management)")
+        heditparser.add_argument('--configure-hostname', action='store_true', help="Set the hostname on the host to the FQDN that is currently the hostname for the instance in AMS")
         heditparser.add_argument('-z', '--zone', help="availability zone that the instance is in")
         heditparser.set_defaults(func=self.command_host_edit)
 
@@ -169,12 +230,19 @@ class InstanceManager(BaseManager):
                 vars.append(val)
             if val == "":
                 updates.append("{0}=NULL".format(f))
+        write_db = True
         if len(updates) == 0:
             self.logger.info("Nothing to update")
-            return
+            write_db = False
 
-        vars.append(args.instance)
-        self.db.execute("update hosts set " + ", ".join(updates) + " where instance_id=%s", vars)
-        self.dbconn.commit()
-        self.logger.info("Instance {0} updated")
+        if write_db:
+            vars.append(args.instance)
+            self.db.execute("update hosts set " + ", ".join(updates) + " where instance_id=%s", vars)
+            self.dbconn.commit()
+            self.logger.info("Instance {0} updated")
 
+        if args.configure_hostname:
+            self.db.execute("select host from hosts where instance_id=%s", (args.instance, ))
+            row = self.db.fetchone()
+            hostname = row[0]
+            self.configure_hostname(args.instance, hostname, True)

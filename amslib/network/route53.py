@@ -1,8 +1,10 @@
 import boto
 from amslib.core.manager import BaseManager
+from amslib.instance.instance import InstanceManager
 import argparse
 from errors import *
 import pprint
+import time
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -665,6 +667,8 @@ class Route53Manager(BaseManager):
         group.add_argument('-i', '--instance', help="Instance ID")
         adddnsparser.add_argument('--use', help="Define whether to use the public or private hostname/IP", choices=["public", "private"], default="public")
         adddnsparser.add_argument('--identifier', help="Unique identifier to associate to a record that shares a name/type with other records in weighted, latency, or failover records. If not provided, one will be created from the hostname or instance id")
+        adddnsparser.add_argument('--update-hosts', action='store_true', help="(routing_policy=simple only) Updates the hostname for the host in the AMS hosts table (saving you from having to run route53 discovery to update)")
+        adddnsparser.add_argument('--configure-hostname', action='store_true', help="(routing_policy=simple only) Set the hostname on the host to the FQDN that was just added to the host. Also applies the --update-hosts option (for Ubuntu and Redhat flavors, it will also edit the proper files to make this change permanent)")
         group = adddnsparser.add_argument_group(title="Health Check Options", description="Use these options to create a health check for the dns record being added to host")
         group.add_argument('--hc', action='store_true', help="Create a Route53 health check for host")
         group.add_argument('--hc-port', type=int, help="Health check port")
@@ -754,7 +758,7 @@ class Route53Manager(BaseManager):
         if not row:
             self.logger.error("{0} not found".format(wherevar))
             return
-
+        instance_id = row[0]
         if args.use == 'public':
             cname_entry = row[3]
             ip_entry = row[5]
@@ -811,6 +815,14 @@ class Route53Manager(BaseManager):
         args.record_value = entry_value
 
         self.command_create_dns(args)
+
+        if (args.configure_hostname or args.update_hosts) and args.routing_policy == 'simple':
+            if args.configure_hostname:
+                self.logger.info("Waiting 30 seconds to give route53 time to reflect the new dns changes")
+                time.sleep(30)
+
+            im = InstanceManager(self.settings)
+            im.configure_hostname(instance_id, args.fqdn, args.configure_hostname)
 
 
     def command_create_healthcheck(self, args):
