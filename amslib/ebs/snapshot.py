@@ -294,6 +294,7 @@ class SnapshotManager(BaseManager):
             else:
                 for s in snapshots:
                     s.update()
+                self.logger.info("Waiting for snaphots to complete")
                 time.sleep(5)
 
         vm = VolumeManager(self.settings)
