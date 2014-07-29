@@ -43,7 +43,7 @@ class SnapshotManager(BaseManager):
     # pre_command and post_command can be a string containing a command to run using sudo on host, or they can be a callable function
     # if they are callable then these named parameters will be passed in:  hostname, instance_id
     # note that the pre/post commands will not be executed if the volume group is not attached to a host
-    def snapshot_volume_group(self, volume_group_id, description=None, pre_command=None, post_command=None, expiry_date=None):
+    def snapshot_volume_group(self, volume_group_id, description=None, pre_command=None, post_command=None, expiry_date=None, freeze_fs=False):
         # lookup volume_group and instance_id (if attached)
         self.db.execute("select "
                           "vg.volume_group_id, "
@@ -101,6 +101,12 @@ class SnapshotManager(BaseManager):
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot pre_command\n{0}\n{1}".format(pre_command, stderr))
 
+            if freeze_fs and vgdata[8] is not None:
+                sh = SSHManager()
+                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --freeze {0}".format(vgdata[8]), sudo_password=self.settings.SUDO_PASSWORD)
+                if int(exit_code) != 0:
+                    raise SnapshotError("There was an error running fsfreeze\n{0}".format(stderr))
 
         # start snapshot on each volume
         snaps = {}
@@ -122,6 +128,8 @@ class SnapshotManager(BaseManager):
         self.store_snapshot_group(snapshots, volume_group_id, vgdata[3], vgdata[1], vgdata[2], vgdata[4], vgdata[6], expiry_date, vgdata[10], vgdata[8], vgdata[7])
 
         # run postcommand
+        postcmderr = False
+        errmsg = ""
         if attached:
             if isinstance(post_command, types.FunctionType):
                 post_command(hostname=vgdata[10], instance_id=vgdata[7])
@@ -130,7 +138,21 @@ class SnapshotManager(BaseManager):
                 sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
                 stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
-                    raise SnapshotError("There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr))
+                    postcmderr = True
+                    errmsg = "There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr)
+
+            if freeze_fs and vgdata[8] is not None:
+                sh = SSHManager()
+                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --unfreeze {0}".format(vgdata[8]), sudo_password=self.settings.SUDO_PASSWORD)
+                if int(exit_code) != 0:
+                    chained = ""
+                    if len(errmsg):
+                        chained = errmsg + "\n"
+                    raise SnapshotError("{0}There was an error running fsfreeze\n{1}".format(chained, stderr))
+
+        if postcmderr:
+            raise SnapshotError(errmsg)
 
 
     def delete_snapshot_group(self, snapshot_group_id):
@@ -515,7 +537,7 @@ class SnapshotManager(BaseManager):
                 else:
                     volume_group_id = schedule[3]
 
-                self.snapshot_volume_group(volume_group_id=volume_group_id, description=schedule[17], pre_command=schedule[15], post_command=schedule[16], expiry_date=expiry_date)
+                self.snapshot_volume_group(volume_group_id=volume_group_id, description=schedule[17], pre_command=schedule[15], post_command=schedule[16], expiry_date=expiry_date, freeze_fs=self.settings.FREEZE_FILESYSTEM)
 
 
     def get_snapshot_struct(self, snapshot_id, size, raid_device_id, volume_id, region, block_device=None, piops=None, snapshot_group_id=None, tags=None, description=None):
@@ -549,6 +571,7 @@ class SnapshotManager(BaseManager):
         screatevolparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
         screatevolparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
         screatevolparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
+        screatevolparser.add_argument("--freeze", action="store_true", help="Issue an fsfreeze command to freeze and unfreeze the filesystem of a volume when taking the snapshot")
         screatevolparser.set_defaults(func=self.command_snapshot_create_volume)
         # ams snapshot create host
         screatehostparser = screatesubparser.add_parser("host", help="create a snapshot of a specific volume group on a host")
@@ -560,6 +583,7 @@ class SnapshotManager(BaseManager):
         screatehostparser.add_argument("--pre", help="command to run on host to prepare for starting EBS snapshot (will not be run if volume group is not attached)")
         screatehostparser.add_argument("--post", help="command to run on host after snapshot (will not be run if volume group is not attached)")
         screatehostparser.add_argument("-d", "--description", help="description to add to snapshot(s)")
+        screatehostparser.add_argument("--freeze", action="store_true", help="Issue an fsfreeze command to freeze and unfreeze the filesystem of a volume when taking the snapshot")
         screatehostparser.set_defaults(func=self.command_snapshot_create_host)
 
         # ams snapshot delete
@@ -831,7 +855,7 @@ class SnapshotManager(BaseManager):
         self.logger.info("Volume group {0} created".format(volume_group_id))
 
     def command_snapshot_create_volume(self, args):
-        self.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post)
+        self.snapshot_volume_group(args.volume_group_id, args.description, args.pre, args.post, None, args.freeze | self.settings.FREEZE_FILESYSTEM)
 
 
     def command_snapshot_create_host(self, args):
@@ -853,7 +877,7 @@ class SnapshotManager(BaseManager):
         self.db.execute(sql)
         res = self.db.fetchone()
         if res:
-            self.snapshot_volume_group(res[0], args.description, args.pre, args.post)
+            self.snapshot_volume_group(res[0], args.description, args.pre, args.post, None, args.freeze | self.settings.FREEZE_FILESYSTEM)
         else:
             self.logger.error("Volume group not found")
             exit(1)

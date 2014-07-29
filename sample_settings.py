@@ -37,6 +37,9 @@ TRACKING_DB = {
 SSH_PASSWORD = None if not SSH_PASSWORD or SSH_PASSWORD.lower() == 'none' else SSH_PASSWORD
 SUDO_PASSWORD = None if not SUDO_PASSWORD or SUDO_PASSWORD.lower() == 'none' else SUDO_PASSWORD
 
+# Set this to True to, by default, run fsfreeze to freeze/unfreeze the filesystem for a volume when snapshotting
+FREEZE_FILESYSTEM = env('AWSMS_FREEZE_FILESYSTEM', False)
+
 # Expand '~' if it has been used to specify the ssh keyfile location
 SSH_KEYFILE = None if not SSH_KEYFILE else os.path.expanduser(SSH_KEYFILE)
 # sets the output log level, supported values: DEBUG, INFO, WARNING, ERROR, CRITICAL

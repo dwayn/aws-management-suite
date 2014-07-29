@@ -452,6 +452,8 @@ Arguments:
                             if volume group is not attached)
       -d DESCRIPTION, --description DESCRIPTION
                             description to add to snapshot(s)
+      --freeze              Issue an fsfreeze command to freeze and unfreeze the
+                            filesystem of a volume when taking the snapshot
 
 ----
 
@@ -477,6 +479,8 @@ Arguments:
                             if volume group is not attached)
       -d DESCRIPTION, --description DESCRIPTION
                             description to add to snapshot(s)
+      --freeze              Issue an fsfreeze command to freeze and unfreeze the
+                            filesystem of a volume when taking the snapshot
 
 ----
 

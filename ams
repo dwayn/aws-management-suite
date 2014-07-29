@@ -40,8 +40,12 @@ except:
     pass
 
 
+# this is a placeholder for now... #TODO build a proper defaults handler for settings
 if not hasattr(settings, 'human_output'):
     settings.human_output = True
+if not hasattr(settings, 'FREEZE_FILESYSTEM'):
+    settings.FREEZE_FILESYSTEM = False
+
 
 vm = VolumeManager(settings)
 snapmanager = SnapshotManager(settings)
