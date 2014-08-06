@@ -371,8 +371,11 @@ class Route53Manager(BaseManager):
                 ident = r.identifier
                 if not r.identifier:
                     ident = ""
-                self.db.execute("insert into route53_records set zone_id=%s, name=%s, type=%s, identifier=%s, resource_records=%s, ttl=%s, alias_hosted_zone_id=%s, alias_dns_name=%s, weight=%s, region=%s, healthcheck_id=%s",
-                                (zone_id, name, r.type, ident, "\n".join(r.resource_records), r.ttl, r.alias_hosted_zone_id, r.alias_dns_name, r.weight, r.region, r.health_check))
+                self.db.execute("insert into route53_records set zone_id=%s, name=%s, type=%s, identifier=%s, resource_records=%s, ttl=%s, alias_hosted_zone_id=%s, "
+                                "alias_dns_name=%s, weight=%s, region=%s, healthcheck_id=%s on duplicate key update resource_records=%s, ttl=%s, alias_hosted_zone_id=%s, "
+                                "alias_dns_name=%s, weight=%s, region=%s, healthcheck_id=%s",
+                                (zone_id, name, r.type, ident, "\n".join(r.resource_records), r.ttl, r.alias_hosted_zone_id, r.alias_dns_name, r.weight, r.region, r.health_check,
+                                "\n".join(r.resource_records), r.ttl, r.alias_hosted_zone_id, r.alias_dns_name, r.weight, r.region, r.health_check))
                 self.dbconn.commit()
                 self.logger.info("Found {0} record for {1}".format(r.type, r.name))
 
@@ -544,8 +547,11 @@ class Route53Manager(BaseManager):
             ident = rec.identifier
             if not rec.identifier:
                 ident = ""
-            self.db.execute("insert into route53_records set zone_id=%s, name=%s, type=%s, identifier=%s, resource_records=%s, ttl=%s, alias_hosted_zone_id=%s, alias_dns_name=%s, weight=%s, region=%s, healthcheck_id=%s",
-                            (zone_id, name, rec.type, ident, "\n".join(rec.resource_records), rec.ttl, rec.alias_hosted_zone_id, rec.alias_dns_name, rec.weight, rec.region, rec.health_check))
+            self.db.execute("insert into route53_records set zone_id=%s, name=%s, type=%s, identifier=%s, resource_records=%s, ttl=%s, alias_hosted_zone_id=%s, "
+                            "alias_dns_name=%s, weight=%s, region=%s, healthcheck_id=%s on duplicate key update resource_records=%s, ttl=%s, alias_hosted_zone_id=%s, "
+                            "alias_dns_name=%s, weight=%s, region=%s, healthcheck_id=%s",
+                            (zone_id, name, rec.type, ident, "\n".join(rec.resource_records), rec.ttl, rec.alias_hosted_zone_id, rec.alias_dns_name, rec.weight, rec.region, rec.health_check,
+                             "\n".join(rec.resource_records), rec.ttl, rec.alias_hosted_zone_id, rec.alias_dns_name, rec.weight, rec.region, rec.health_check))
             self.dbconn.commit()
             self.logger.info("Created new dns entry for {0} -> {1}".format(fqdn, " \\n ".join(records)))
             self.db.execute("update route53_zones z set record_sets = (select count(*) from route53_records where zone_id=z.zone_id)")
