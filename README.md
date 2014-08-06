@@ -135,6 +135,9 @@ Arguments:
 
       -i INSTANCE, --instance INSTANCE
                             Instance ID of the instance to add
+      -u UNAME, --uname UNAME
+                            Hostname to use when setting uname on the host
+                            (default is to use instance hostname)
       -H HOSTNAME, --hostname HOSTNAME
                             hostname of the host (used to ssh to the host to do
                             management)
@@ -166,6 +169,9 @@ Arguments:
 
       -i INSTANCE, --instance INSTANCE
                             Instance ID of the instance to add
+      -u UNAME, --uname UNAME
+                            Hostname to use when setting uname on the host
+                            (default is to use instance hostname)
       --hostname-internal HOSTNAME_INTERNAL
                             internal hostname (stored but not currently used)
       --hostname-external HOSTNAME_EXTERNAL
@@ -185,7 +191,9 @@ Arguments:
                             hostname of the host (used to ssh to the host to do
                             management)
       --configure-hostname  Set the hostname on the host to the FQDN that is
-                            currently the hostname for the instance in AMS
+                            currently the hostname or the uname that is currently
+                            defined for the instance in AMS (uname will override
+                            FQDN)
       -z ZONE, --zone ZONE  availability zone that the instance is in
 
 ----
@@ -960,10 +968,11 @@ Arguments:
                             the host in the AMS hosts table (saving you from
                             having to run route53 discovery to update)
       --configure-hostname  (routing_policy=simple only) Set the hostname on the
-                            host to the FQDN that was just added to the host. Also
-                            applies the --update-hosts option (for Ubuntu and
-                            Redhat flavors, it will also edit the proper files to
-                            make this change permanent)
+                            host to the FQDN that was just added to the host or
+                            the currently set uname (uname will override the
+                            FQDN). Also applies the --update-hosts option (for
+                            Ubuntu and Redhat flavors, it will also edit the
+                            proper files to make this change permanent)
 
 ----
 

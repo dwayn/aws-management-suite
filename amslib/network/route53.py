@@ -677,7 +677,7 @@ class Route53Manager(BaseManager):
         adddnsparser.add_argument('--use', help="Define whether to use the public or private hostname/IP", choices=["public", "private"], default="public")
         adddnsparser.add_argument('--identifier', help="Unique identifier to associate to a record that shares a name/type with other records in weighted, latency, or failover records. If not provided, one will be created from the hostname or instance id")
         adddnsparser.add_argument('--update-hosts', action='store_true', help="(routing_policy=simple only) Updates the hostname for the host in the AMS hosts table (saving you from having to run route53 discovery to update)")
-        adddnsparser.add_argument('--configure-hostname', action='store_true', help="(routing_policy=simple only) Set the hostname on the host to the FQDN that was just added to the host. Also applies the --update-hosts option (for Ubuntu and Redhat flavors, it will also edit the proper files to make this change permanent)")
+        adddnsparser.add_argument('--configure-hostname', action='store_true', help="(routing_policy=simple only) Set the hostname on the host to the FQDN that was just added to the host or the currently set uname (uname will override the FQDN). Also applies the --update-hosts option (for Ubuntu and Redhat flavors, it will also edit the proper files to make this change permanent)")
         group = adddnsparser.add_argument_group(title="Health Check Options", description="Use these options to create a health check for the dns record being added to host")
         group.add_argument('--hc', action='store_true', help="Create a Route53 health check for host")
         group.add_argument('--hc-port', type=int, help="Health check port")
