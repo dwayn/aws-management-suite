@@ -426,7 +426,7 @@ class Route53Manager(BaseManager):
         if 'IPAddress' in health_check['HealthCheckConfig']:
             ipaddr = health_check['HealthCheckConfig']['IPAddress']
 
-        self.logger.info("Storing health check: {0}://{1}:{2}".format(health_check['HealthCheckConfig']['Type'], health_check['HealthCheckConfig']['IPAddress'], health_check['HealthCheckConfig']['Port']))
+        self.logger.info("Storing health check: {0}://{1}:{2}".format(health_check['HealthCheckConfig']['Type'], ipaddr, health_check['HealthCheckConfig']['Port']))
         self.db.execute("insert into route53_healthchecks set healthcheck_id=%s, ip=%s, port=%s, type=%s, request_interval=%s, "
                         "failure_threshold=%s, resource_path=%s, search_string=%s, fqdn=%s, caller_reference=%s "
                         "on duplicate key update ip=%s, port=%s, type=%s, request_interval=%s, failure_threshold=%s, "
