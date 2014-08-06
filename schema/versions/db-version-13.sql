@@ -1,0 +1,1 @@
+ALTER TABLE `route53_healthchecks` MODIFY COLUMN `ip` varchar(20) DEFAULT NULL;
