@@ -1005,7 +1005,7 @@ class SnapshotManager(BaseManager):
             updates['retain_yearly'] = args.retentions[4]
 
         if not len(updates):
-            self.logging.error("Must provide something to update on a snapshot schedule")
+            self.logger.error("Must provide something to update on a snapshot schedule")
             return
 
         self.edit_snapshot_schedule(args.schedule_id, updates)
@@ -1027,7 +1027,7 @@ class SnapshotManager(BaseManager):
             self.db.execute("select snapshot_group_id from snapshot_groups join snapshots using(snapshot_group_id) where expiry_date < now() group by snapshot_group_id")
             rows = self.db.fetchall()
             if not rows:
-                self.logging.error("No expired snapshots to delete")
+                self.logger.error("No expired snapshots to delete")
                 return
             for row in rows:
                 self.delete_snapshot_group(row[0])
