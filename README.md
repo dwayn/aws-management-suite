@@ -412,6 +412,7 @@ Arguments:
 
       -r REGION, --region REGION
                             Filter the snapshots by region
+      -x, --extended        Show more detailed information
 
 ----
 
@@ -426,6 +427,7 @@ Arguments:
                             Filter the snapshots by region
       --like LIKE           search string to use to filter hosts
       --prefix PREFIX       search string prefix to filter hosts
+      -x, --extended        Show more detailed information
 
 ----
 
@@ -440,6 +442,7 @@ Arguments:
                             Filter the snapshots by region
       --like LIKE           search string to use to filter hosts
       --prefix PREFIX       search string prefix to filter hosts
+      -x, --extended        Show more detailed information
 
 ----
 
