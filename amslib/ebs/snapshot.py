@@ -167,7 +167,24 @@ class SnapshotManager(BaseManager):
             snapids.append(s[1])
 
         botoconn = self.__get_boto_conn(region)
-        snaps = botoconn.get_all_snapshots(snapids)
+        try:
+            snaps = botoconn.get_all_snapshots(snapids)
+        except Exception, e:
+            if e.error_code == 'InvalidSnapshot.NotFound':
+                class fakesnap(object):
+                    def __init__(self, logger):
+                        self.logger = logger
+                        self.id = None
+                    def delete(self):
+                        self.logger.info("Snapshot {0} not found in AWS, removing from local db".format(self.id))
+
+                snaps = []
+                for i in snapids:
+                    s = fakesnap(self.logger)
+                    s.id = i
+                    snaps.append(s)
+            else:
+                raise
 
         for snap in snaps:
             sid = snap.id
@@ -605,6 +622,7 @@ class SnapshotManager(BaseManager):
         slistvolumeparser = slistsubparser.add_parser("volume", help="List snapshots for a volume_group_id")
         slistvolumeparser.add_argument("volume_group_id", type=int, help="List the snapshots of volume_group_id")
         slistvolumeparser.add_argument("-r", "--region", help="Filter the snapshots by region")
+        slistvolumeparser.add_argument("-x", "--extended", help="Show more detailed information", action='store_true')
         #ams snapshot list host
         slisthostparser = slistsubparser.add_parser("host", help="List snapshots for a host(s)")
         slisthostparser.add_argument("hostname", nargs='?', help="Hostname to list snapshots for the currently attached volumes on a host")
@@ -612,6 +630,7 @@ class SnapshotManager(BaseManager):
         slisthostparser.add_argument("-r", "--region", help="Filter the snapshots by region")
         slisthostparser.add_argument("--like", help="search string to use to filter hosts")
         slisthostparser.add_argument("--prefix", help="search string prefix to filter hosts")
+        slisthostparser.add_argument("-x", "--extended", help="Show more detailed information", action='store_true')
         # ams snaoshot list instance
         slisthostparser = slistsubparser.add_parser("instance", help="List snapshots for an instance(s)")
         slisthostparser.add_argument("instance_id", nargs='?', help="Instance ID to list snapshots for for the currently attached volumes on an instance")
@@ -619,6 +638,7 @@ class SnapshotManager(BaseManager):
         slisthostparser.add_argument("-r", "--region", help="Filter the snapshots by region")
         slisthostparser.add_argument("--like", help="search string to use to filter hosts")
         slisthostparser.add_argument("--prefix", help="search string prefix to filter hosts")
+        slisthostparser.add_argument("-x", "--extended", help="Show more detailed information", action='store_true')
 
 
         # shared arguments for all of the snapshot clone parsers
@@ -755,6 +775,12 @@ class SnapshotManager(BaseManager):
             whereclauses.append("region = %s")
             whereargs.append(args.region)
 
+        headers = ["snapshot_group_id", "host", "instance", "mount point", "volume_group_id", "volume type", "raid level", "filesystem", "num volumes", "total size", "iops", "region", "created date", "expires", "description"]
+        extendedinfosql = ""
+        if args.extended:
+            extendedinfosql = ",group_concat(`snapshot_id` separator '\n') "
+            headers = ["snapshot_group_id", "host", "instance", "mount point", "volume_group_id", "volume type", "raid level", "filesystem", "num volumes", "total size", "iops", "region", "created date", "expires", "description", "snapshots"]
+
 
         sql = "select " \
               "snapshot_group_id, " \
@@ -771,16 +797,15 @@ class SnapshotManager(BaseManager):
               "region, " \
               "created_date, " \
               "expiry_date, " \
-              "description " \
+              "description " + extendedinfosql + \
               "from snapshot_groups " \
               "join snapshots using (snapshot_group_id) "
         if whereclauses:
             sql += " where " + " and ".join(whereclauses)
         sql += " group by snapshot_group_id"
-
+        print sql;
         self.db.execute(sql, whereargs)
         rows = self.db.fetchall()
-        headers = ["snapshot_group_id", "host", "instance", "mount point", "volume_group_id", "volume type", "raid level", "filesystem", "num volumes", "total size", "iops", "region", "created date", "expires", "description"]
         self.output_formatted("Snapshots", headers, rows)
 
 
