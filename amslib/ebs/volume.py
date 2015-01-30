@@ -732,7 +732,7 @@ class VolumeManager(BaseManager):
         vdetachparser.set_defaults(func=self.command_volume_detach)
         detachdefaultsparser = argparse.ArgumentParser(add_help=False)
         detachdefaultsparser.add_argument('-u', '--unmount', help="Unmounts the volume group if it is mounted. If this option is not included and the volume is mounted the detach operation will fail", action='store_true')
-        detachdefaultsparser.add_argument('-f', '--force', help="Force detach the volume group's EBS volumes")
+        detachdefaultsparser.add_argument('-f', '--force', help="Force detach the volume group's EBS volumes", action='store_true')
         vdetachsubparser = vdetachparser.add_subparsers(title='type', dest='type')
         # ams volume detach volume
         vdetachvolumeparser = vdetachsubparser.add_parser("volume", help="Detach a volume_group_id from the instance that it is currently attached", parents=[detachdefaultsparser])

@@ -3,6 +3,8 @@ import argparse
 from amslib.core.manager import BaseManager
 from amslib.ssh.sshmanager import SSHManager
 import time
+from pprint import pprint
+
 
 class InstanceManager(BaseManager):
 
@@ -44,12 +46,12 @@ class InstanceManager(BaseManager):
                     pass
 
                 self.db.execute("insert into hosts set instance_id=%s, host=%s, hostname_internal=%s, hostname_external=%s, "
-                                "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s, uname=%s on duplicate "
-                                "key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
-                                "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s)", (i.id, hn, hint, hext,
+                                "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s, uname=%s, vpc_id=%s, "
+                                "subnet_id=%s on duplicate key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
+                                "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s), vpc_id=%s, subnet_id=%s", (i.id, hn, hint, hext,
                                                                             i.private_ip_address, i.ip_address, i.image_id, i.instance_type,
-                                                                            i.placement, name, uname, hint, hext, i.private_ip_address,
-                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name, hn))
+                                                                            i.placement, name, uname, i.vpc_id, i.subnet_id, hint, hext, i.private_ip_address,
+                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name, hn, i.vpc_id, i.subnet_id))
                 self.dbconn.commit()
 
         self.db.execute("update hosts set `terminated`=0 where instance_id in ('{0}')".format("','".join(instance_ids)))

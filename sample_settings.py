@@ -33,6 +33,9 @@ TRACKING_DB = {
     'dbname' :  env('AWSMS_DB_NAME',          'ams'),
 }
 
+# can be one of "standard" or "gp2" for magnetic or general purpose ssd (not implemented yet)
+DEFAULT_EBS_VOLUME_TYPE = "standard"
+
 # Turn the string "None" into None in password fields
 SSH_PASSWORD = None if not SSH_PASSWORD or SSH_PASSWORD.lower() == 'none' else SSH_PASSWORD
 SUDO_PASSWORD = None if not SUDO_PASSWORD or SUDO_PASSWORD.lower() == 'none' else SUDO_PASSWORD
