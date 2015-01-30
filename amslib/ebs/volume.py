@@ -177,8 +177,8 @@ class VolumeManager(BaseManager):
         if not voldata:
             raise VolumeGroupNotFound("Metadata not found for volume_group_id: {0}".format(volume_group_id))
 
-        sh = SSHManager()
-        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh = SSHManager(self.settings)
+        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
         fs_type = voldata[0][2]
 
@@ -283,8 +283,8 @@ class VolumeManager(BaseManager):
         cur_mount_point, host, availability_zone, block_device, volume_group_type, fs_type = data
         region = self.parse_region_from_availability_zone(availability_zone)
 
-        sh = SSHManager()
-        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh = SSHManager(self.settings)
+        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
         if not mount_point:
             stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
@@ -329,7 +329,8 @@ class VolumeManager(BaseManager):
                           "host, "
                           "vg.block_device, "
                           "vg.group_type, "
-                          "vg.fs_type "
+                          "vg.fs_type, "
+                          "h.instance_id "
                           "from hosts h "
                           "join host_volumes hv on h.instance_id=hv.instance_id and hv.volume_group_id=%s "
                           "join volume_groups vg on vg.volume_group_id=hv.volume_group_id", (volume_group_id, ))
@@ -337,12 +338,12 @@ class VolumeManager(BaseManager):
         if not info:
             raise VolumeMountError("instance_id, volume_group_id, or host_volume association not found")
 
-        defined_mount_point, host, block_device, group_type, fs_type = info
+        defined_mount_point, host, block_device, group_type, fs_type, instance_id = info
         if not block_device:
             raise VolumeMountError("block device is not set for volume group {0}, check that the volume group is attached".format(volume_group_id))
 
-        sh = SSHManager()
-        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh = SSHManager(self.settings)
+        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
         if not remove:
             if not mount_point:
@@ -516,8 +517,8 @@ class VolumeManager(BaseManager):
 
         cur_mount_point, host, instance_id, availability_zone, block_device, volume_group_type, fs_type = data
 
-        sh = SSHManager()
-        sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh = SSHManager(self.settings)
+        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
         block_device_match_pattern = '^([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
 
         stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.SUDO_PASSWORD)
@@ -580,8 +581,8 @@ class VolumeManager(BaseManager):
             raise VolumeNotAvailable("Volume group {0} does not appear to be attached, use force option to force the detachment")
 
         if volume_type == 'raid' and host:
-            sh = SSHManager()
-            sh.connect(hostname=host, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+            sh = SSHManager(self.settings)
+            sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
             command = '/sbin/mdadm --stop {0}'.format(block_device)
             stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
             if int(exit_code) != 0:

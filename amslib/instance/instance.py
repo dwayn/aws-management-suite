@@ -88,8 +88,8 @@ class InstanceManager(BaseManager):
         if row[2]:
             uname = row[2]
 
-        sh = SSHManager()
-        sh.connect(hostname=hostname, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh = SSHManager(self.settings)
+        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
 
         self.logger.info("Setting the running value for hostname on the instance")
         stdout, stderr, exit_code = sh.sudo('hostname {0}'.format(uname), sudo_password=self.settings.SUDO_PASSWORD)
@@ -261,7 +261,7 @@ class InstanceManager(BaseManager):
             vars.append(args.instance)
             self.db.execute("update hosts set " + ", ".join(updates) + " where instance_id=%s", vars)
             self.dbconn.commit()
-            self.logger.info("Instance {0} updated", args.instance);
+            self.logger.info("Instance %s updated", args.instance)
 
         if args.configure_hostname:
             self.db.execute("select host from hosts where instance_id=%s", (args.instance, ))

@@ -95,15 +95,15 @@ class SnapshotManager(BaseManager):
             if isinstance(pre_command, types.FunctionType):
                 pre_command(hostname=vgdata[10], instance_id=vgdata[7])
             elif isinstance(pre_command, types.StringType):
-                sh = SSHManager()
-                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                sh = SSHManager(self.settings)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
                 stdout, stderr, exit_code = sh.sudo(pre_command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot pre_command\n{0}\n{1}".format(pre_command, stderr))
 
             if freeze_fs and vgdata[8] is not None:
-                sh = SSHManager()
-                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                sh = SSHManager(self.settings)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
                 stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --freeze {0}".format(vgdata[8]), sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running fsfreeze\n{0}".format(stderr))
@@ -134,16 +134,16 @@ class SnapshotManager(BaseManager):
             if isinstance(post_command, types.FunctionType):
                 post_command(hostname=vgdata[10], instance_id=vgdata[7])
             elif isinstance(post_command, types.StringType):
-                sh = SSHManager()
-                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                sh = SSHManager(self.settings)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
                 stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     postcmderr = True
                     errmsg = "There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr)
 
             if freeze_fs and vgdata[8] is not None:
-                sh = SSHManager()
-                sh.connect(hostname=vgdata[10], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+                sh = SSHManager(self.settings)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
                 stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --unfreeze {0}".format(vgdata[8]), sudo_password=self.settings.SUDO_PASSWORD)
                 if int(exit_code) != 0:
                     chained = ""

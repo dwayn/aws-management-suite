@@ -3,14 +3,19 @@ import paramiko
 import socket
 import pipes
 from errors import *
+import MySQLdb
 
 
 class SSHManager:
 
-    def __init__(self):
+    def __init__(self, settings):
         self.client = paramiko.SSHClient()
         self.hostname = None
         self.__connected = False
+        self.instance = None
+        self.dbconn = None
+        self.db = None
+        self.settings = settings
 
 
     # connect to a host
@@ -19,6 +24,38 @@ class SSHManager:
         self.client.connect(hostname=hostname, port=port, username=username, password=password, key_filename=key_filename, timeout=timeout, look_for_keys=look_for_keys)
         self.hostname = hostname
         self.__connected = True
+
+    def connect_instance(self, instance, port=22, username=None, password=None, key_filename=None, timeout=None, look_for_keys=True):
+        if not self.db:
+            self.dbconn = MySQLdb.connect(host=self.settings.TRACKING_DB['host'],
+                                 port=self.settings.TRACKING_DB['port'],
+                                 user=self.settings.TRACKING_DB['user'],
+                                 passwd=self.settings.TRACKING_DB['pass'],
+                                 db=self.settings.TRACKING_DB['dbname'])
+            self.db = self.dbconn.cursor()
+
+        self.db.execute("select ip_internal, ip_external, vpc_id, subnet_id from hosts where instance_id=%s", (instance, ))
+        data = self.db.fetchone()
+        if not data:
+            raise InstanceNotFound("Instance ID {0} not found".format(instance))
+
+        ip_internal, hostname_external, vpc_id, subnet_id = data
+
+        hostname = None
+        instance_domain = 'Unknown'
+        if subnet_id:
+            hostname = ip_internal
+            instance_domain = 'VPC'
+        else:
+            # use the ec2 external hostname for ec2 classic hosts because it will map to the internal ip address when
+            #   run from within ec2 and will map to external ip when run from outside of ec2
+            hostname = hostname_external
+            instance_domain = 'EC2 Classic'
+
+        if not hostname:
+            raise InstanceNotAccessible("Unable to determine an IP address in {0} for instance ID: {1}".format(instance_domain, instance))
+
+        return self.connect(hostname=hostname, port=port, username=username, password=password, key_filename=key_filename, timeout=timeout, look_for_keys=look_for_keys)
 
 
     def run(self, command):

@@ -139,7 +139,7 @@ Arguments:
                             Hostname to use when setting uname on the host
                             (default is to use instance hostname)
       -H HOSTNAME, --hostname HOSTNAME
-                            hostname of the host (used to ssh to the host to do
+                            hostname of the host (used to reference the host for 
                             management)
       -z ZONE, --zone ZONE  availability zone that the instance is in
       --hostname-internal HOSTNAME_INTERNAL
@@ -188,7 +188,7 @@ Arguments:
       --name NAME           Name of the host (should match the 'Name' tag in EC2
                             for the instance)
       -H HOSTNAME, --hostname HOSTNAME
-                            hostname of the host (used to ssh to the host to do
+                            hostname of the host (used to reference the host for 
                             management)
       --configure-hostname  Set the hostname on the host to the FQDN that is
                             currently the hostname or the uname that is currently

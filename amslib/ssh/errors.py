@@ -13,6 +13,11 @@ class NotConnected(SshManagerError):
 class FailedAuthentication(SshManagerError):
     pass
 
+class InstanceNotFound(SshManagerError):
+    pass
+
+class InstanceNotAccessible(SshManagerError):
+    pass
 
 
 
