@@ -33,7 +33,7 @@ class BaseManager:
                 # gives some value for output so that command line tools like cut and awk work more easily
                 return "---"
 
-        if self.settings.human_output:
+        if self.settings.HUMAN_OUTPUT:
             print "\n\n{0}:".format(table_title)
             table = prettytable.PrettyTable(column_headers)
             table.align = 'l'

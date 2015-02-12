@@ -48,20 +48,37 @@ Route53
 * support for managing Simple, Weighted Round Robin, Failover, and Latency routing policies in Route53 records
 * delete DNS record
 
+## Change Log
+Changes that are made are now being tracked in the [CHANGELOG](CHANGELOG.md)
+
 ## Setup and Configuration
 ### Initial installation
-* This tool will only work on systems with python 2.6+ (due to paramiko requirements), but to date has only been tested on 2.6.6 and 2.7.6 but should run on any 2.6.x or 2.7.x version (3.x compatibility is unknown). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
+* This tool will only work on systems with python 2.6+ (due to paramiko requirements), but to date has only been tested on 2.6.6 and 2.7.6 but should run on any 2.6.x or 2.7.x version (3.x compatibility is unknown but unlikely). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
 * The tool requires ssh and sudo access to hosts in order to accomplish tasks like mounting volumes and running system commands to start/stop services (for snapshots)
-* Copy sample_settings.py to settings.py and edit AWS, SSH and SUDO access credentials
+* Copy defaults.ini to /etc/ams.ini or ~/ams.ini and edit AWS, SSH and SUDO access credentials
 * A MySQL database needs to be setup for tracking state. The following statements assume that the mysql database and the tool are located on the same host:
  * `CREATE DATABASE ams;` -- Create the schema
- * `GRANT ALL PRIVILEGES ON ams.* TO 'ams_user'@'localhost' IDENTIFIED BY 'mypass';` -- (This will create user with username 'ams_user' and password of 'mypass' and give access to the new schema created)
-* Edit TRACKING_DB credentials in settings.py with the proper credentials for your MySQL database
+ * `GRANT ALL PRIVILEGES ON ams.* TO 'ams_user'@'localhost' IDENTIFIED BY 'ams_pass';` -- (This will create user with username 'ams_user' and password of 'ams_pass' and give access to the new schema created)
+* Edit TRACKING_DB credentials in your ams.ini file with the proper credentials for your MySQL database (default settings are configured to match the above grant with standard mysql install)
 * `pip install -r requirements.txt` will install the handful of external dependencies
  * You have option of either running pip install as root or if you have setup a virtualenv for this tool, then you you can run pip install without root in the virtual environment
  * Documentation on setting the tool up with virtualenv is planned for the future
 * Suggested: add the path to ams directory to your path or add symlink to `ams` script to a directory in the system path
 * `ams internals database install` will create the current full version of all of the tables
+
+#### Config file priority
+In order from highest to lowest priority:
+* Environment variables: AMS_*
+* Values in user's config file (~/ams.ini)
+* Values in global config file (/etc/ams.ini)
+* Legacy configuration values (settings.py)
+* Values in default config file (defaults.ini)
+* Database values
+
+    Note: User, global, and default configuration ini files are mutually exclusive 
+        so only one will be loaded. Priority order is user, global, default with 
+        user having highest priority. This may change to an override model in the 
+        future if a compelling reason is found.
 
 ### Enabling bash/zsh completion
 This project makes use of the argcomplete library (https://github.com/kislyuk/argcomplete) to provide dynamic completion. As part of the pip installation,

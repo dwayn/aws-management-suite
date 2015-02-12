@@ -3,7 +3,7 @@
 import argparse
 import argcomplete
 import MySQLdb
-import settings
+#import settings
 import inspect
 import os
 import logging
@@ -11,41 +11,14 @@ from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
 from amslib.network.route53 import Route53Manager
+from amslib.core.config import Config
+import pprint
 # DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 15
+DATABASE_VERSION = 16
 #############################
 
 
-dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
-                     port=settings.TRACKING_DB['port'],
-                     user=settings.TRACKING_DB['user'],
-                     passwd=settings.TRACKING_DB['pass'],
-                     db=settings.TRACKING_DB['dbname'])
-db = dbconn.cursor()
-
-try:
-    db.execute("select value from config where var = 'DATABASE_VERSION'")
-    row = db.fetchone()
-    if not row:
-        settings.CURRENT_DATABASE_VERSION = -1
-        print "\nDatabase has not been installed, before continuing you must run: ams internals database install\n\n"
-    else:
-        settings.CURRENT_DATABASE_VERSION = int(row[0])
-        if settings.CURRENT_DATABASE_VERSION != DATABASE_VERSION:
-            print "\nDatabase needs to be updated, before continuing you must run: ams internals database upgrade\n\n"
-
-except:
-    print "\nDatabase has not been installed, before continuing you must run: ams internals database install\n\n"
-    settings.CURRENT_DATABASE_VERSION = -1
-    pass
-
-
-# this is a placeholder for now... #TODO build a proper defaults handler for settings
-if not hasattr(settings, 'human_output'):
-    settings.human_output = True
-if not hasattr(settings, 'FREEZE_FILESYSTEM'):
-    settings.FREEZE_FILESYSTEM = False
-
+settings = Config()
 
 vm = VolumeManager(settings)
 snapmanager = SnapshotManager(settings)
@@ -54,30 +27,21 @@ r53 = Route53Manager(settings)
 
 amsroot = os.path.realpath(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename))
 
-def install_db(args):
-    filename = os.path.dirname(amsroot) + '/schema/schema.sql'
-    sqlfile = open(filename, "r")
-    sqlcontents = sqlfile.read()
-    statements = sqlcontents.split("\n\n--\n\n")
-    for sql in statements:
-        db.execute(sql)
-        dbconn.commit()
-    db.execute("insert into config set var=%s, value=%s", ('DATABASE_VERSION', str(DATABASE_VERSION)))
-    dbconn.commit()
-
-
 def upgrade_db(args):
+    dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
+                         port=settings.TRACKING_DB['port'],
+                         user=settings.TRACKING_DB['user'],
+                         passwd=settings.TRACKING_DB['pass'],
+                         db=settings.TRACKING_DB['dbname'])
+    db = dbconn.cursor()
     pathstub = os.path.dirname(amsroot) + '/schema/versions/'
     filename_stub = 'db-version-'
     extension = '.sql'
 
-    db.execute("select value from config where var='DATABASE_VERSION'")
-    v = db.fetchone()
-    version = int(v[0])
-    if version == DATABASE_VERSION:
+    if settings.DATABASE_VERSION == DATABASE_VERSION:
         print "Database is up to date"
         return
-    for i in range(version+1, DATABASE_VERSION+1):
+    for i in range(settings.DATABASE_VERSION + 1, DATABASE_VERSION + 1):
         print "Applying version {0}".format(i)
         filename = pathstub + filename_stub + str(i) + extension
         sqlfile = open(filename, "r")
@@ -90,7 +54,8 @@ def upgrade_db(args):
         db.execute("insert into config set var=%s, value=%s on duplicate key update value=%s", ('DATABASE_VERSION', str(i), str(i)))
         dbconn.commit()
 
-
+    db.execute("update config set `type`='int', `description`='Current version of the internal database tables', `configurable`=0 where `var`='DATABASE_VERSION'")
+    dbconn.commit()
 
 def main():
     logger = logging.getLogger('ams')
@@ -100,7 +65,7 @@ def main():
     subparsers = parser.add_subparsers(title="type", dest='type')
 
     # all of the operational command parsers should be in here to force internals tasks that need to be done
-    if settings.CURRENT_DATABASE_VERSION == DATABASE_VERSION:
+    if settings.DATABASE_VERSION == DATABASE_VERSION:
         hparser = subparsers.add_parser("host", help="direct host/instance related operations")
         im.build_argument_parser(hparser)
 
@@ -117,10 +82,10 @@ def main():
     isubparser = iparser.add_subparsers(title="type", dest='type')
     dbparser = isubparser.add_parser("database", help="Manage the AMS metadata database")
     dbsubparser = dbparser.add_subparsers(title="action", dest='action')
-    if settings.CURRENT_DATABASE_VERSION == -1:
+    if settings.DATABASE_VERSION == 0:
         p = dbsubparser.add_parser("install", help="Create all the tables for an initial installation")
-        p.set_defaults(func=install_db)
-    if settings.CURRENT_DATABASE_VERSION != -1:
+        p.set_defaults(func=upgrade_db)
+    if settings.DATABASE_VERSION > 0:
         p = dbsubparser.add_parser("upgrade", help="Upgrade the database to the current version for AMS")
         p.set_defaults(func=upgrade_db)
 
@@ -130,7 +95,7 @@ def main():
 
 
     if args.scriptable_output:
-        settings.human_output = False
+        settings.HUMAN_OUPUT = False
     try:
         args.func(args)
     except Exception as e:

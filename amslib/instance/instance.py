@@ -17,7 +17,7 @@ class InstanceManager(BaseManager):
         regions = boto.ec2.regions()
         instance_ids = []
         for region in regions:
-            self.logger.info("Processing region".format(region.name))
+            self.logger.info("Processing region {0}".format(region.name))
             botoconn = self.__get_boto_conn(region.name)
             self.logger.info("Getting instances")
             try:
