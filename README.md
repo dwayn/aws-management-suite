@@ -113,6 +113,12 @@ Arguments:
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
+      -x, --extended        Show extended information on hosts
+      -a, --all             Include terminated instances (that have been added via
+                            discovery)
+      --terminated          Show only terminated instances (that have been added
+                            via discovery)
+      -g, --tags            Display tags for instances
 
 ----
 
@@ -126,7 +132,12 @@ Arguments:
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
-
+      -x, --extended        Show extended information on hosts
+      -a, --all             Include terminated instances (that have been added via
+                            discovery)
+      --terminated          Show only terminated instances (that have been added
+                            via discovery)
+      -g, --tags            Display tags for instances
 
 ----
 
@@ -140,6 +151,12 @@ Arguments:
       --zone ZONE         Availability zone to filter results by. This is a prefix
                           search so any of the following is valid with increasing
                           specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
+      -x, --extended        Show extended information on hosts
+      -a, --all             Include terminated instances (that have been added via
+                            discovery)
+      --terminated          Show only terminated instances (that have been added
+                            via discovery)
+      -g, --tags            Display tags for instances
 
 ----
 

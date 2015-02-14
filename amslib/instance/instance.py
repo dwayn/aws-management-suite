@@ -211,7 +211,7 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument("-x", "--extended", help="Show extended information on hosts", action='store_true')
         hlistparser.add_argument("-a", "--all", help="Include terminated instances (that have been added via discovery)", action='store_true')
         hlistparser.add_argument("--terminated", help="Show only terminated instances (that have been added via discovery)", action='store_true')
-        hlistparser.add_argument("-t", "--tags", help="Display tags for instances", action='store_true')
+        hlistparser.add_argument("-s", "--show-tags", help="Display tags for instances", action='store_true')
         hlistparser.set_defaults(func=self.command_host_list)
 
         addeditargs = argparse.ArgumentParser(add_help=False)
@@ -466,7 +466,7 @@ class InstanceManager(BaseManager):
         if args.extended:
             extended = ", case `terminated` when 0 then 'no' when 1 then 'yes' end"
             headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "notes", "term"]
-        if args.tags:
+        if args.show_tags:
             headers.append('tags')
             extended += ", group_concat(concat(tags.name, ':\t', tags.value) SEPARATOR '\n')"
             joins = " left join tags on tags.resource_id=hosts.instance_id"
