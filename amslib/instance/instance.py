@@ -2,9 +2,19 @@ import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
 from amslib.ssh.sshmanager import SSHManager
+from errors import *
 import time
 from pprint import pprint
 
+# borrowed from http://stackoverflow.com/questions/4375327/python-argparse-preformatted-help-text
+#TODO this should probably go somewhere central so that it can be used by other modules if needed
+class SmartFormatter(argparse.HelpFormatter):
+
+    def _split_lines(self, text, width):
+        # this is the RawTextHelpFormatter._split_lines
+        if text.startswith('R|'):
+            return text[2:].splitlines()
+        return argparse.HelpFormatter._split_lines(self, text, width)
 
 class InstanceManager(BaseManager):
 
@@ -53,11 +63,68 @@ class InstanceManager(BaseManager):
                                                                             i.placement, name, uname, i.vpc_id, i.subnet_id, hint, hext, i.private_ip_address,
                                                                             i.ip_address, i.image_id, i.instance_type, i.placement, name, hn, i.vpc_id, i.subnet_id))
                 self.dbconn.commit()
+                self.store_ec2_tags(i)
 
         self.db.execute("update hosts set `terminated`=0 where instance_id in ('{0}')".format("','".join(instance_ids)))
         self.dbconn.commit()
         self.db.execute("update hosts set `terminated`=1 where instance_id not in ('{0}')".format("','".join(instance_ids)))
         self.dbconn.commit()
+
+    def store_ec2_tags(self, boto_instance):
+        self.db.execute("update tags set removed=1 where resource_id=%s and `type`='standard' ", (boto_instance.id, ))
+        self.dbconn.commit()
+        for tagname in boto_instance.tags:
+            tagval = boto_instance.tags[tagname]
+            self.logger.debug("Updating tag database for tag {0} to value {1} for instance {2}".format(tagname, tagval, boto_instance.id))
+            self.db.execute("insert into tags set resource_id=%s, name=%s, value=%s, removed=0 on duplicate key update value=%s, removed=0", (boto_instance.id, tagname, tagval, tagval))
+            self.dbconn.commit()
+        self.db.execute("delete from tags where resource_id=%s and removed=1", (boto_instance.id, ))
+        self.dbconn.commit()
+
+
+
+    def add_tag(self, instance_id, tagname, tagvalue, tagtype='standard'):
+        region, availability_zone, instance = self._get_instance_info(instance_id)
+        self.logger.info("Adding {0} tag {1} with value {2} to instance {3} in {4}".format(tagtype, tagname, tagvalue, instance_id, availability_zone))
+        if tagtype == 'standard':
+            try:
+                instance.add_tag(tagname, tagvalue)
+            except boto.exception.EC2ResponseError as e:
+                if e.code == 'TagLimitExceeded':
+                    self.logger.error("Unable to add tag to EC2 instance, tag limit already reached. Only extended tags can be used until some standard tags are removed from the instance.")
+                    return
+                else:
+                    raise
+        self.db.execute("insert into tags set resource_id=%s, name=%s, value=%s, type=%s, removed=0 on duplicate key update value=%s, removed=0", (instance_id, tagname, tagvalue, tagtype, tagvalue))
+        self.dbconn.commit()
+
+
+    def remove_tag(self, instance_id, tagname):
+        region, availability_zone, instance = self._get_instance_info(instance_id)
+        self.logger.info("Deleting tag {0} from instance {1} in {2}".format(tagname, instance_id, availability_zone))
+        self.db.execute("select type from tags where resource_id=%s and name=%s", (instance_id, tagname))
+        row = self.db.fetchone()
+        if not row:
+            self.logger.error("Tag {0} not found for instance {0}")
+            return
+        if row[0] == 'standard':
+            instance.remove_tag(tagname)
+
+        self.db.execute("delete from tags where resource_id=%s and name=%s", (instance_id, tagname))
+        self.dbconn.commit()
+
+
+    def _get_instance_info(self, instance_id):
+        self.db.execute("SELECT availability_zone, host from hosts where instance_id=%s", (instance_id, ))
+        data = self.db.fetchone()
+        if not data:
+            raise InstanceNotFound("Instance {0} not found; unable to lookup availability zone for instance, try running: ams host discovery".format(instance_id))
+        availability_zone, host = data
+        region = self.parse_region_from_availability_zone(availability_zone)
+        botoconn = self.__get_boto_conn(region)
+        instance = botoconn.get_only_instances([instance_id])[0]
+
+        return region, availability_zone, instance
 
 
     def configure_hostname(self, instance_id, hostname, configure_server=False):
@@ -136,14 +203,15 @@ class InstanceManager(BaseManager):
 
         # ams host list
         hlistparser = hsubparser.add_parser("list", help="list currently managed hosts")
-        hlistparser.add_argument('search_field', nargs="?", help="field to search (host or instance_id)", choices=['host', 'instance_id'])
+        hlistparser.add_argument('search_field', nargs="?", help="field to search (host or instance_id)", choices=['host', 'instance_id', 'name'])
         hlistparser.add_argument('field_value', nargs="?", help="exact match search value")
         hlistparser.add_argument("--like", help="string to find within 'search-field'")
         hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
         hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
         hlistparser.add_argument("-x", "--extended", help="Show extended information on hosts", action='store_true')
         hlistparser.add_argument("-a", "--all", help="Include terminated instances (that have been added via discovery)", action='store_true')
-        hlistparser.add_argument("-t", "--terminated", help="Show only terminated instances (that have been added via discovery)", action='store_true')
+        hlistparser.add_argument("--terminated", help="Show only terminated instances (that have been added via discovery)", action='store_true')
+        hlistparser.add_argument("-t", "--tags", help="Display tags for instances", action='store_true')
         hlistparser.set_defaults(func=self.command_host_list)
 
         addeditargs = argparse.ArgumentParser(add_help=False)
@@ -175,6 +243,196 @@ class InstanceManager(BaseManager):
         discparser.add_argument("--get-unames", action='store_true', help="Connects to each server to query the system's uname, much slower discovery due to ssh to each host (not implemented yet)")
         discparser.set_defaults(func=self.command_discover)
 
+
+        htagargs = argparse.ArgumentParser(add_help=False)
+        htagargs.add_argument('--prefix', help="For host/name identification, treats the given string as a prefix", action='store_true')
+        htagargs.add_argument('--like', help="For host/name identification, searches for instances that contain the given string", action='store_true')
+        htagargs.add_argument('-t', '--tag', help="R|Filter instances by tag, in the form name<OPERATOR>value.\nValid operators: \n\t=\t(equal)\n\t!=\t(not equal)\n\t=~\t(contains/like)\n\t!=~\t(not contains/not like)\n\t=:\t(prefixed by)\n\t!=:\t(not prefixed by)\nEg. To match Name tag containing 'foo': --tag Name=~foo", action='append')
+        htaggroup = htagargs.add_mutually_exclusive_group()
+        htaggroup.add_argument('-i', '--instance', help="instance_id of an instance to manage tags")
+        htaggroup.add_argument('-H', '--host', help="hostname of an instance to manage tags")
+        htaggroup.add_argument('-e', '--name', help="name of an instance to manage tags")
+
+        # ams host tag
+        htagparser = hsubparser.add_parser("tag", help="Manage tags for instances")
+        htagsubparser = htagparser.add_subparsers(title="operation", dest='operation')
+
+        # ams host tag list
+        htaglist = htagsubparser.add_parser('list', help="List instance tags", parents=[htagargs], formatter_class=SmartFormatter)
+        htaglist.set_defaults(func=self.command_tag)
+
+        # ams host tag add
+        htagadd = htagsubparser.add_parser('add', help="Add tag to an instance or group of instances", parents=[htagargs], formatter_class=SmartFormatter)
+        htagadd.add_argument('tagname', help="Name of the tag")
+        htagadd.add_argument('tagvalue', help="Value of the tag")
+        htagadd.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
+        htagadd.add_argument('-p', '--tag-type', choices=['standard', 'extended'], default='standard', help="Type of tag, standard tags are applied to the instance in AWS, extended tags only exist in the ams database to give you the ability to add tags beyond AWS limitations")
+        htagadd.set_defaults(func=self.command_tag)
+
+        # ams host tag edit
+        htagedit = htagsubparser.add_parser('edit', help="Edit tag on an instance or group of instances", parents=[htagargs], formatter_class=SmartFormatter)
+        htagedit.add_argument('tagname', help="Name of the tag")
+        htagedit.add_argument('tagvalue', help="Value of the tag")
+        htagedit.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
+        htagedit.add_argument('-p', '--tag-type', choices=['standard', 'extended'], default='standard', help="Type of tag, standard tags are applied to the instance in AWS, extended tags only exist in the ams database to give you the ability to add tags beyond AWS limitations")
+        htagedit.set_defaults(func=self.command_tag)
+
+        # ams host tag delete
+        htagdelete = htagsubparser.add_parser('delete', help="Delete a tag from an instance or group of instances", parents=[htagargs], formatter_class=SmartFormatter)
+        htagdelete.add_argument('tagname', help="Name of the tag")
+        htagdelete.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
+        htagdelete.set_defaults(func=self.command_tag)
+
+
+
+    def command_tag(self, args):
+        whereclause = ''
+        whereval = None
+        instance_id = None
+        queryvars = []
+        if args.instance:
+            whereclause = 'hosts.instance_id=%s '
+            whereval = args.instance
+            instance_id = args.instance
+            pass
+        elif args.host:
+            whereclause = 'hosts.host=%s '
+            whereval = args.host
+            pass
+        elif args.name:
+            whereclause = 'hosts.name=%s '
+            whereval = args.name
+            pass
+
+        if whereval and not instance_id:
+            if args.prefix:
+                whereclause = whereclause.replace('=', ' like ')
+                whereval += '%'
+            if args.like:
+                whereclause = whereclause.replace('=', ' like ')
+                whereval = '%' + whereval + '%'
+
+        if whereclause:
+            queryvars.append(whereval)
+
+        filterclauses = []
+        filtervals = []
+        filterclause = ''
+        if args.tag:
+            for tagarg in args.tag:
+                tagname = None
+                tagvalue = None
+                operator = '='
+                prewild = ''
+                postwild = ''
+                sumoperator = '>'
+                if '!=:' in tagarg:
+                    tagname, tagvalue = tagarg.split('!=:', 1)
+                    operator = 'like'
+                    postwild = '%'
+                    sumoperator = '='
+                elif '!=~' in tagarg:
+                    tagname, tagvalue = tagarg.split('!=~', 1)
+                    operator = 'like'
+                    postwild = '%'
+                    prewild = '%'
+                    sumoperator = '='
+                elif '!=' in tagarg:
+                    tagname, tagvalue = tagarg.split('!=', 1)
+                    operator = '='
+                    sumoperator = '='
+                elif '=~' in tagarg:
+                    tagname, tagvalue = tagarg.split('=~', 1)
+                    operator = 'like'
+                    postwild = '%'
+                    prewild = '%'
+                elif '=:' in tagarg:
+                    tagname, tagvalue = tagarg.split('=:', 1)
+                    operator = 'like'
+                    postwild = '%'
+                elif '=' in tagarg:
+                    tagname, tagvalue = tagarg.split('=', 1)
+                else:
+                    self.logger.error('Unable to parse tag filter, unknown format: "{0}"'.format(tagarg))
+                    return
+
+                if tagname and tagvalue:
+                    filterclauses.append("sum(tags.name = %s and tags.value {0} %s) {1} 0".format(operator, sumoperator))
+                    filtervals.append(tagname)
+                    filtervals.append(prewild + tagvalue + postwild)
+
+            if len(filtervals):
+                queryvars += filtervals
+                filterclause = "having " + " and ".join(filterclauses)
+
+
+        if whereclause:
+            whereclause = "where {0}".format(whereclause)
+
+# select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host, tags.name as tagname, tags.value, tags.type from hosts left join tags on tags.resource_id=hosts.instance_id where hosts.name like 'prod.web%' group by instance_id  having sum(tags.name = 'Name' and tags.value = 'prod.web.lb') = 0) as h left join tags t on t.resource_id=h.instance_id
+
+        if args.operation == 'list':
+            sql = "select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host, tags.name as tagname, tags.value, tags.type from hosts left join tags on tags.resource_id=hosts.instance_id {0} group by instance_id {1}) as h left join tags t on t.resource_id=h.instance_id".format(whereclause, filterclause)
+            self.db.execute(sql, queryvars)
+            self.logger.debug("Executing query: {0}".format(self.db._last_executed))
+
+            rows = self.db.fetchall()
+            results = []
+            last_instance_id = ''
+            instance_count = 0
+            tag_count = 0
+            for row in rows:
+                tag_count += 1
+                result = list(row)
+                if self.settings.HUMAN_OUTPUT and result[0] == last_instance_id:
+                    result[0] = result[1] = result[2] = ' '
+                else:
+                    if last_instance_id:
+                        results.append([' ', ' ', ' ', ' ', ' ', ' '])
+                    last_instance_id = result[0]
+                    instance_count += 1
+                results.append(result)
+            self.output_formatted('Host Tags', ['instance_id', 'name', 'host', 'tag name', 'tag value', 'type'], results, "{0} hosts matched, {1} total tags".format(instance_count, tag_count))
+            return
+
+        if not whereclause and not filterclause:
+            self.logger.error("One of the arguments -i/--instance -H/--host -e/--name -t/--tag is required to identify instances for tag add/edit/delete operations (accidental global tag editing protection)")
+            return
+        instance_ids = []
+        if not instance_id:
+            sql = "select instance_id from hosts left join tags on tags.resource_id=hosts.instance_id {0} group by instance_id {1}".format(whereclause, filterclause)
+            self.db.execute(sql, queryvars)
+            rows = self.db.fetchall()
+            if not rows:
+                self.logger.error("No instances found matching {0}".format(whereclause).replace('%s', queryvars).replace('%', '*').replace('hosts.', ''))
+            for row in rows:
+                if row[0] not in instance_ids:
+                    instance_ids.append(row[0])
+        else:
+            instance_ids = [instance_id]
+
+        if len(instance_ids) > 1 and not args.allow_multiple:
+            self.logger.error("{0} instances matched, use --allow-multiple to apply add/edit/delete operation to multiple instances".format(len(instance_ids)))
+            return
+
+
+        if args.operation == 'add' or args.operation == 'edit':
+            if not args.tagname or not args.tagvalue:
+                self.logger.error("tagname and tagvalue are required for tag add/edit operations")
+                return
+            for instance_id in instance_ids:
+                self.add_tag(instance_id, args.tagname, args.tagvalue, args.tag_type)
+            return
+
+        if args.operation == 'delete':
+            if not args.tagname:
+                self.logger.error("tagname is required for tag delete operation")
+                return
+            for instance_id in instance_ids:
+                self.remove_tag(instance_id, args.tagname)
+            return
+
+
     def command_discover(self, args):
         self.discover(args.get_unames)
 
@@ -202,16 +460,25 @@ class InstanceManager(BaseManager):
             whereclauses.append("`terminated` = 0")
 
         extended = ""
-        headers = ["Hostname", "instance_id", "availability_zone", "name", "notes"]
+        joins = ""
+        groupby = ""
+        headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "notes"]
         if args.extended:
-            extended = ", case `terminated` when 0 then 'no' when 1 then 'yes' end, ip_internal, ip_external, hostname_internal, hostname_external"
-            headers = ["Hostname", "instance_id", "availability_zone", "name", "notes", "term", "int ip", "ext ip", "int hostname", "ext hostname"]
-        sql = "select host, instance_id, availability_zone, name, notes{0} from hosts".format(extended)
+            extended = ", case `terminated` when 0 then 'no' when 1 then 'yes' end"
+            headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "notes", "term"]
+        if args.tags:
+            headers.append('tags')
+            extended += ", group_concat(concat(tags.name, ':\t', tags.value) SEPARATOR '\n')"
+            joins = " left join tags on tags.resource_id=hosts.instance_id"
+            groupby = " group by instance_id"
+        sql = "select host, instance_id, availability_zone, hosts.name, ip_internal, ip_external, notes{0} from hosts{1}".format(extended, joins)
         if len(whereclauses):
             sql += " where " + " and ".join(whereclauses)
+        sql += groupby
         sql += order_by
         self.db.execute(sql)
         results = self.db.fetchall()
+
         self.output_formatted("Hosts", headers, results)
 
 

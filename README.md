@@ -215,6 +215,148 @@ Arguments:
 
 ----
 
+#### `ams host tag list`
+Lists the tags for an instance or group of instances. With no arguments, it will list all instances and their tags. Instances can 
+be identified by host or name (with support for wildcard matching using --like or --prefix) or instance id. Furthermore, instances 
+can be matched or filtered by tags using one or more --tag arguments.
+
+Arguments:
+
+      --prefix              For host/name identification, treats the given string
+                            as a prefix
+      --like                For host/name identification, searches for instances
+                            that contain the given string
+      -t TAG, --tag TAG     Filter instances by tag, in the form name<OPERATOR>value.
+                            Valid operators: 
+                                =	(equal)
+                                !=	(not equal)
+                                =~	(contains/like)
+                                !=~	(not contains/not like)
+                                =:	(prefixed by)
+                                !=:	(not prefixed by)
+                            Eg. To match Name tag containing 'foo': --tag Name=~foo
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to manage tags
+      -H HOST, --host HOST  hostname of an instance to manage tags
+      -e NAME, --name NAME  name of an instance to manage tags
+
+----
+
+#### `ams host tag add (tagname) (tagvalue)`
+Adds a tag to an instance or group of instances. Tags can be standard tags (applied to the instance in AWS) or extended (only 
+exist in AMS database and not applied in AWS). Instances can be identified by host or name (with support for wildcard matching 
+using --like or --prefix) or instance id. Furthermore, instances can be matched or filtered by tags using one or more --tag arguments.
+Adding tags is disabled in the case where no filters (instance id, name, host, tag) are used to identify hosts to protect against 
+accidental editing of tags globally. 
+
+`Note: adding a tag to an instance that already exists on the instance will overwrite the value`
+
+Required arguments: tagname, tagvalue
+
+Arguments:
+
+      --prefix              For host/name identification, treats the given string
+                            as a prefix
+      --like                For host/name identification, searches for instances
+                            that contain the given string
+      -t TAG, --tag TAG     Filter instances by tag, in the form name<OPERATOR>value.
+                            Valid operators: 
+                                =	(equal)
+                                !=	(not equal)
+                                =~	(contains/like)
+                                !=~	(not contains/not like)
+                                =:	(prefixed by)
+                                !=:	(not prefixed by)
+                            Eg. To match Name tag containing 'foo': --tag Name=~foo
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to manage tags
+      -H HOST, --host HOST  hostname of an instance to manage tags
+      -e NAME, --name NAME  name of an instance to manage tags
+      -m, --allow-multiple  Allow updating tags on multiple identifed instances
+                            (otherwise add/edit/delete operations will fail if
+                            there is multiple instances)
+      -p {standard,extended}, --tag-type {standard,extended}
+                            Type of tag, standard tags are applied to the instance
+                            in AWS, extended tags only exist in the ams database
+                            to give you the ability to add tags beyond AWS
+                            limitations
+
+----
+
+#### `ams host tag edit (tagname) (tagvalue)`
+Modifies a tag to an instance or group of instances. Tags can be standard tags (applied to the instance in AWS) or extended (only 
+exist in AMS database and not applied in AWS). Instances can be identified by host or name (with support for wildcard matching 
+using --like or --prefix) or instance id. Furthermore, instances can be matched or filtered by tags using one or more --tag arguments.
+Adding tags is disabled in the case where no filters (instance id, name, host, tag) are used to identify hosts to protect against 
+accidental editing of tags globally.
+
+`This is currently a wrapper for add but these may diverge in the future`
+
+Required arguments: tagname, tagvalue
+
+Arguments:
+
+      --prefix              For host/name identification, treats the given string
+                            as a prefix
+      --like                For host/name identification, searches for instances
+                            that contain the given string
+      -t TAG, --tag TAG     Filter instances by tag, in the form name<OPERATOR>value.
+                            Valid operators: 
+                                =	(equal)
+                                !=	(not equal)
+                                =~	(contains/like)
+                                !=~	(not contains/not like)
+                                =:	(prefixed by)
+                                !=:	(not prefixed by)
+                            Eg. To match Name tag containing 'foo': --tag Name=~foo
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to manage tags
+      -H HOST, --host HOST  hostname of an instance to manage tags
+      -e NAME, --name NAME  name of an instance to manage tags
+      -m, --allow-multiple  Allow updating tags on multiple identifed instances
+                            (otherwise add/edit/delete operations will fail if
+                            there is multiple instances)
+      -p {standard,extended}, --tag-type {standard,extended}
+                            Type of tag, standard tags are applied to the instance
+                            in AWS, extended tags only exist in the ams database
+                            to give you the ability to add tags beyond AWS
+                            limitations
+
+----
+
+#### `ams host tag delete (tagname)`
+Removes a tag from an instance or group of instances. Instances can be identified by host or name (with support for wildcard matching 
+using --like or --prefix) or instance id. Furthermore, instances can be matched or filtered by tags using one or more --tag arguments.
+Adding tags is disabled in the case where no filters (instance id, name, host, tag) are used to identify hosts to protect against 
+accidental editing of tags globally.
+
+Required arguments: tagname
+
+Arguments:
+
+      --prefix              For host/name identification, treats the given string
+                            as a prefix
+      --like                For host/name identification, searches for instances
+                            that contain the given string
+      -t TAG, --tag TAG     Filter instances by tag, in the form name<OPERATOR>value.
+                            Valid operators: 
+                                =	(equal)
+                                !=	(not equal)
+                                =~	(contains/like)
+                                !=~	(not contains/not like)
+                                =:	(prefixed by)
+                                !=:	(not prefixed by)
+                            Eg. To match Name tag containing 'foo': --tag Name=~foo
+      -i INSTANCE, --instance INSTANCE
+                            instance_id of an instance to manage tags
+      -H HOST, --host HOST  hostname of an instance to manage tags
+      -e NAME, --name NAME  name of an instance to manage tags
+      -m, --allow-multiple  Allow updating tags on multiple identifed instances
+                            (otherwise add/edit/delete operations will fail if
+                            there is multiple instances)
+
+----
+
 #### `ams host discovery`
 Runs host discovery to populate the hosts table automatically
 

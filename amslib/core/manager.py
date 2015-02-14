@@ -25,7 +25,7 @@ class BaseManager:
         raise NotImplementedError("argument_parser_builder not implemented")
 
 
-    def output_formatted(self, table_title, column_headers, data):
+    def output_formatted(self, table_title, column_headers, data, summary_text=None):
         def tstr(x):
             if x is not None:
                 return str(x)
@@ -40,6 +40,10 @@ class BaseManager:
             for row in data:
                 table.add_row(map(tstr, row))
             print table
+            if summary_text:
+                print "{0}\n".format(summary_text)
+            else:
+                print "{0} total records\n".format(len(data))
             print "\n\n"
         else:
             for row in data:
