@@ -5,304 +5,10 @@ import argparse
 from errors import *
 import pprint
 import time
+from boto.route53.record import Record
+from boto.route53.healthcheck import HealthCheck
 
 pp = pprint.PrettyPrinter(indent=4)
-
-
-# Custom HealthCheck object to add support for failure threshold...seems to have been missed in boto
-class HealthCheck(object):
-
-    """An individual health check"""
-
-    POSTXMLBody = """
-        <HealthCheckConfig>
-            <IPAddress>%(ip_addr)s</IPAddress>
-            <Port>%(port)s</Port>
-            <Type>%(type)s</Type>
-            %(resource_path)s
-            %(fqdn_part)s
-            %(string_match_part)s
-            %(request_interval)s
-            %(failure_threshold)s
-        </HealthCheckConfig>
-    """
-
-    XMLResourcePathPart = """<ResourcePath>%(resource_path)s</ResourcePath>"""
-
-    XMLFQDNPart = """<FullyQualifiedDomainName>%(fqdn)s</FullyQualifiedDomainName>"""
-
-    XMLStringMatchPart = """<SearchString>%(string_match)s</SearchString>"""
-
-    XMLRequestIntervalPart = """<RequestInterval>%(request_interval)d</RequestInterval>"""
-
-    XMLRequestFailurePart = """<FailureThreshold>%(failure_threshold)d</FailureThreshold>"""
-
-    valid_request_intervals = (10, 30)
-
-    valid_failure_thresholds = range(1, 11)  # valid values are integers 1-10
-
-    def __init__(self, ip_addr, port, hc_type, resource_path, fqdn=None, string_match=None, request_interval=30, failure_threshold=3):
-        """
-        HealthCheck object
-
-        :type ip_addr: str
-        :param ip_addr: IP Address
-
-        :type port: int
-        :param port: Port to check
-
-        :type hc_type: str
-        :param ip_addr: One of HTTP | HTTPS | HTTP_STR_MATCH | HTTPS_STR_MATCH | TCP
-
-        :type resource_path: str
-        :param resource_path: Path to check
-
-        :type fqdn: str
-        :param fqdn: domain name of the endpoint to check
-
-        :type string_match: str
-        :param string_match: if hc_type is HTTP_STR_MATCH or HTTPS_STR_MATCH, the string to search for in the response body from the specified resource
-
-        :type request_interval: int
-        :param request_interval: The number of seconds between the time that Amazon Route 53 gets a response from your endpoint and the time that it sends the next health-check request.
-
-        :type failure_threshold: int
-        :param failure_threshold: The number of times that Amazon Route 53 that a health check has fails before the resource is marked as down.
-
-        """
-        self.ip_addr = ip_addr
-        self.port = port
-        self.hc_type = hc_type
-        self.resource_path = resource_path
-        self.fqdn = fqdn
-        self.string_match = string_match
-
-        if failure_threshold in self.valid_failure_thresholds:
-            self.failure_threshold = failure_threshold
-        else:
-            raise AttributeError(
-                "Valid values for request_interval are: %s" %
-                ",".join(str(i) for i in self.valid_failure_thresholds))
-
-        if request_interval in self.valid_request_intervals:
-            self.request_interval = request_interval
-        else:
-            raise AttributeError(
-                "Valid values for request_interval are: %s" %
-                ",".join(str(i) for i in self.valid_request_intervals))
-
-    def to_xml(self):
-        params = {
-            'ip_addr': self.ip_addr,
-            'port': self.port,
-            'type': self.hc_type,
-            'resource_path': "",
-            'fqdn_part': "",
-            'string_match_part': "",
-            'request_interval': (self.XMLRequestIntervalPart %
-                                 {'request_interval': self.request_interval}),
-            'failure_threshold': (self.XMLRequestFailurePart %
-                                 {'failure_threshold': self.failure_threshold}),
-        }
-        if self.fqdn is not None:
-            params['fqdn_part'] = self.XMLFQDNPart % {'fqdn': self.fqdn}
-
-        if self.string_match is not None:
-            params['string_match_part'] = self.XMLStringMatchPart % {'string_match' : self.string_match}
-
-        if self.resource_path is not None:
-            params['resource_path'] = self.XMLResourcePathPart % {'resource_path' : self.resource_path}
-
-        return self.POSTXMLBody % params
-
-# custom version of the boto.route53.record.Record module to add support for failover resource records and to fix the missing health chech field on a response
-class Record(object):
-    """An individual ResourceRecordSet"""
-
-    HealthCheckBody = """<HealthCheckId>%s</HealthCheckId>"""
-
-    XMLBody = """<ResourceRecordSet>
-        <Name>%(name)s</Name>
-        <Type>%(type)s</Type>
-        %(weight)s
-        %(body)s
-        %(health_check)s
-    </ResourceRecordSet>"""
-
-    WRRBody = """
-        <SetIdentifier>%(identifier)s</SetIdentifier>
-        <Weight>%(weight)s</Weight>
-    """
-
-    RRRBody = """
-        <SetIdentifier>%(identifier)s</SetIdentifier>
-        <Region>%(region)s</Region>
-    """
-
-    FailoverBody = """
-        <SetIdentifier>%(identifier)s</SetIdentifier>
-        <Failover>%(failover)s</Failover>
-    """
-
-    ResourceRecordsBody = """
-        <TTL>%(ttl)s</TTL>
-        <ResourceRecords>
-            %(records)s
-        </ResourceRecords>"""
-
-    ResourceRecordBody = """<ResourceRecord>
-        <Value>%s</Value>
-    </ResourceRecord>"""
-
-    AliasBody = """<AliasTarget>
-        <HostedZoneId>%(hosted_zone_id)s</HostedZoneId>
-        <DNSName>%(dns_name)s</DNSName>
-        %(eval_target_health)s
-    </AliasTarget>"""
-
-    EvaluateTargetHealth = """<EvaluateTargetHealth>%s</EvaluateTargetHealth>"""
-
-    valid_failover_roles = ['PRIMARY', 'SECONDARY']
-
-    def __init__(self, name=None, type=None, ttl=600, resource_records=None,
-            alias_hosted_zone_id=None, alias_dns_name=None, identifier=None,
-            weight=None, region=None, alias_evaluate_target_health=None,
-            health_check=None, failover_role=None):
-        self.name = name
-        self.type = type
-        self.ttl = ttl
-        if resource_records is None:
-            resource_records = []
-        self.resource_records = resource_records
-        self.alias_hosted_zone_id = alias_hosted_zone_id
-        self.alias_dns_name = alias_dns_name
-        self.identifier = identifier
-        self.weight = weight
-        self.region = region
-        self.alias_evaluate_target_health = alias_evaluate_target_health
-        self.health_check = health_check
-        self.failover_role = None
-        if failover_role in self.valid_failover_roles or failover_role is None:
-            self.failover_role = failover_role
-        else:
-            raise AttributeError(
-                "Valid values for failover_role are: %s" %
-                ",".join(self.valid_failover_roles))
-
-    def __repr__(self):
-        return '<Record:%s:%s:%s>' % (self.name, self.type, self.to_print())
-
-    def add_value(self, value):
-        """Add a resource record value"""
-        self.resource_records.append(value)
-
-    def set_alias(self, alias_hosted_zone_id, alias_dns_name,
-                  alias_evaluate_target_health=False):
-        """Make this an alias resource record set"""
-        self.alias_hosted_zone_id = alias_hosted_zone_id
-        self.alias_dns_name = alias_dns_name
-        self.alias_evaluate_target_health = alias_evaluate_target_health
-
-    def to_xml(self):
-        """Spit this resource record set out as XML"""
-        if self.alias_hosted_zone_id is not None and self.alias_dns_name is not None:
-            # Use alias
-            if self.alias_evaluate_target_health is not None:
-                eval_target_health = self.EvaluateTargetHealth % ('true' if self.alias_evaluate_target_health else 'false')
-            else:
-                eval_target_health = ""
-
-            body = self.AliasBody % { "hosted_zone_id": self.alias_hosted_zone_id,
-                                      "dns_name": self.alias_dns_name,
-                                      "eval_target_health": eval_target_health }
-        else:
-            # Use resource record(s)
-            records = ""
-
-            for r in self.resource_records:
-                records += self.ResourceRecordBody % r
-
-            body = self.ResourceRecordsBody % {
-                "ttl": self.ttl,
-                "records": records,
-            }
-
-        weight = ""
-
-        if self.identifier is not None and self.weight is not None:
-            weight = self.WRRBody % {"identifier": self.identifier, "weight":
-                    self.weight}
-        elif self.identifier is not None and self.region is not None:
-            weight = self.RRRBody % {"identifier": self.identifier, "region":
-                    self.region}
-        elif self.identifier is not None and self.failover_role is not None:
-            weight = self.FailoverBody % {"identifier": self.identifier, "failover":
-                    self.failover_role}
-
-        health_check = ""
-        if self.health_check is not None:
-            health_check = self.HealthCheckBody % (self.health_check)
-
-        params = {
-            "name": self.name,
-            "type": self.type,
-            "weight": weight,
-            "body": body,
-            "health_check": health_check
-        }
-        return self.XMLBody % params
-
-    def to_print(self):
-        rr = ""
-        if self.alias_hosted_zone_id is not None and self.alias_dns_name is not None:
-            # Show alias
-            rr = 'ALIAS ' + self.alias_hosted_zone_id + ' ' + self.alias_dns_name
-            if self.alias_evaluate_target_health is not None:
-                rr += ' (EvalTarget %s)' % self.alias_evaluate_target_health
-        else:
-            # Show resource record(s)
-            rr =  ",".join(self.resource_records)
-
-        if self.identifier is not None and self.weight is not None:
-            rr += ' (WRR id=%s, w=%s)' % (self.identifier, self.weight)
-        elif self.identifier is not None and self.region is not None:
-            rr += ' (LBR id=%s, region=%s)' % (self.identifier, self.region)
-
-        return rr
-
-    # this is a terrible thing to have to do, but I had to monkeypatch this to get it to work until new version of boto
-    # comes out that addresses the missing health_check field addressed in this pull request
-    # https://github.com/jzbruno/boto/commit/075634f49441ff293e1717d44c04862b257f65c6
-    def endElement(self, name, value, connection):
-        if name == 'Name':
-            self.name = value
-        elif name == 'Type':
-            self.type = value
-        elif name == 'TTL':
-            self.ttl = value
-        elif name == 'Value':
-            self.resource_records.append(value)
-        elif name == 'HostedZoneId':
-            self.alias_hosted_zone_id = value
-        elif name == 'DNSName':
-            self.alias_dns_name = value
-        elif name == 'SetIdentifier':
-            self.identifier = value
-        elif name == 'EvaluateTargetHealth':
-            self.alias_evaluate_target_health = value
-        elif name == 'Weight':
-            self.weight = value
-        elif name == 'Region':
-            self.region = value
-        # following 2 add support for parsing health check id
-        elif name == 'HealthCheckId':
-            self.health_check = value
-        # following 2 lines add support for parsing the failover role
-        elif name == 'Failover':
-            self.failover_role = value
-
-    def startElement(self, name, attrs, connection):
-        return None
 
 
 class Route53Manager(BaseManager):
@@ -310,14 +16,6 @@ class Route53Manager(BaseManager):
     def __get_boto_conn(self):
         if 'rout53' not in self.boto_conns:
             self.boto_conns["route53"] = boto.connect_route53(aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
-            ################-------------START MONKEYPATCH-------------#####################
-            # this is a terrible thing to have to do, but I had to monkeypatch this to get it to work until boto supports the needed functionality
-            # related pull requests:
-            # https://github.com/boto/boto/pull/2195
-            # https://github.com/boto/boto/pull/2222
-
-            boto.route53.record.Record = Record
-            ################-------------END MONKEYPATCH-------------#####################
         return self.boto_conns["route53"]
 
 
@@ -484,24 +182,24 @@ class Route53Manager(BaseManager):
 
         return hcid
 
-    def create_dns_record(self, fqdn, record_type, zone_id, records, ttl=60, routing_policy='simple', weight=None, identifier=None, region=None, health_check_id=None, failover_role="primary"):
+    def create_dns_record(self, fqdn, record_type, zone_id, records, ttl=60, routing_policy='simple', weight=None, identifier=None, region=None, health_check_id=None, failover="primary"):
         botoconn = self.__get_boto_conn()
         if routing_policy == 'simple':
             weight = None
             identifier = None
             region = None
             health_check_id = None
-            failover_role = None
+            failover = None
         elif routing_policy == 'weighted':
             region = None
-            failover_role = None
+            failover = None
             if not weight:
                 raise AttributeError("weight must be provided for weighted routing policy")
             if not identifier:
                 raise AttributeError("identifier must be provided for weighted routing policy")
         elif routing_policy == 'latency':
             weight = None
-            failover_role = None
+            failover = None
             if not region:
                 raise AttributeError("region must be provided for latency routing policy")
             if not identifier:
@@ -509,8 +207,8 @@ class Route53Manager(BaseManager):
         elif routing_policy == 'failover':
             weight = None
             region = None
-            if not failover_role:
-                raise AttributeError("failover_role must be provided for failover routing policy")
+            if not failover:
+                raise AttributeError("failover must be provided for failover routing policy")
             if not identifier:
                 raise AttributeError("identifier must be provided for failover routing policy")
 
@@ -534,9 +232,9 @@ class Route53Manager(BaseManager):
 
         rrset = zone.get_records()
         record_type = record_type.upper()
-        if failover_role is not None:
-            failover_role = failover_role.upper()
-        rec = Record(name=fqdn, type=record_type, ttl=ttl, resource_records=records, identifier=identifier, weight=weight, region=region, health_check=health_check, failover_role=failover_role)
+        if failover is not None:
+            failover = failover.upper()
+        rec = Record(name=fqdn, type=record_type, ttl=ttl, resource_records=records, identifier=identifier, weight=weight, region=region, health_check=health_check, failover=failover)
         rrset.add_change_record('CREATE', rec)
         response = rrset.commit()
 
@@ -864,7 +562,7 @@ class Route53Manager(BaseManager):
             fqdn += '.'
 
         #TODO should likely put a check here to make sure that the fqdn is valid for the zone name
-        self.create_dns_record(fqdn=fqdn, record_type=args.record_type, zone_id=zone_id, records=[args.record_value], ttl=args.ttl, routing_policy=args.routing_policy, weight=args.weight, identifier=args.identifier, region=args.region, health_check_id=args.health_check, failover_role=args.failover_role.upper())
+        self.create_dns_record(fqdn=fqdn, record_type=args.record_type, zone_id=zone_id, records=[args.record_value], ttl=args.ttl, routing_policy=args.routing_policy, weight=args.weight, identifier=args.identifier, region=args.region, health_check_id=args.health_check, failover=args.failover_role.upper())
 
 
     def command_not_implemented(self, args):

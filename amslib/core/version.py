@@ -2,3 +2,4 @@
 DATABASE_VERSION = 18
 #############################
 
+MINIMUM_BOTO_VERSION = '2.36.0'

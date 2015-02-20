@@ -7,6 +7,8 @@ import ConfigParser
 from errors import *
 import pprint
 import _mysql_exceptions
+from version import *
+import boto
 
 class Config:
 
@@ -40,6 +42,18 @@ class Config:
         if self.NEED_INSTALL or self.NEED_UPGRADE:
             self.DISABLE_OPERATIONS = True
 
+        self._check_versions()
+
+    def _check_versions(self):
+        boto_version_parts = boto.__version__.split('.')
+        min_boto_version_parts = MINIMUM_BOTO_VERSION.split('.')
+        for i in range(len(boto_version_parts)):
+            if boto_version_parts[i] > min_boto_version_parts[i]:
+                break
+            elif boto_version_parts[i] == min_boto_version_parts[i]:
+                continue
+            else:
+                raise DependencyRequired("boto library out of date, (installed = {0}) (required >= {1}). Run 'pip install -r requirements.txt' to update dependencies.".format(boto.__version__, MINIMUM_BOTO_VERSION))
 
     def load_database(self):
         dbconn = MySQLdb.connect(host=self.TRACKING_DB['host'],

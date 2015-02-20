@@ -1,6 +1,11 @@
 aws-management-suite Change Log
 ===============================
 
+### February 20, 2015
+* Removed the monkey patches for boto libraries related to Route53 healthchecks and failover records
+* Increased the minimum required version of boto to 2.36.0
+* Added functionality to Config to force upgrade of boto module if needed
+
 ### February 19, 2015
 
 * Dynamic inventory generation for easy integration of AMS with Ansible's [(Dynamic Inventory)](http://docs.ansible.com/intro_dynamic_inventory.html)

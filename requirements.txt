@@ -1,7 +1,6 @@
 paramiko
 mysql-python
-# there is a monkeypatch in route53 file that must be removed to upgrade to different version of boto
-boto==2.27.0
+boto>=2.36.0
 argparse
 PrettyTable
 argcomplete

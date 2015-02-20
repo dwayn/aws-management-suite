@@ -12,3 +12,6 @@ class NoConfigFile(AMSError):
 
 class InvalidConfigFile(AMSError):
     pass
+
+class DependencyRequired(AMSError):
+    pass
