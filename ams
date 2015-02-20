@@ -7,15 +7,13 @@ import MySQLdb
 import inspect
 import os
 import logging
+from amslib.core.version import DATABASE_VERSION
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
 from amslib.network.route53 import Route53Manager
 from amslib.core.config import Config
 import pprint
-# DO NOT CHANGE THIS VARIABLE
-DATABASE_VERSION = 17
-#############################
 
 
 settings = Config()

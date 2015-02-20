@@ -1,6 +1,15 @@
 aws-management-suite Change Log
 ===============================
 
+### February 19, 2015
+
+* Dynamic inventory generation for easy integration of AMS with Ansible's [(Dynamic Inventory)](http://docs.ansible.com/intro_dynamic_inventory.html)
+ * ams-inventory script can now be used as the inventory argument for ansible using `ansible -i /path/to/ams/ams-inventory` to use the AMS database to dynamically configure an ansible installation 
+ * Management of server group hierarchies supported using `ams-inventory` script
+ * Templates can be applied to host tags to assign hosts to ansible groups dynamically
+ * Management of tag templates handled through `ams-inventory` script
+
+
 ### February 13, 2015
 
 * Added tag management support for instances

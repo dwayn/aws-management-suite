@@ -10,11 +10,19 @@ import _mysql_exceptions
 
 class Config:
 
-    def __init__(self):
+    def __init__(self, override_values={}):
+        self.AMS_LOGLEVEL = 'WARNING'
+        self.GLOBAL_LOGLEVEL = 'CRITICAL'
+
+        self.override_values = override_values
+        for k,v in override_values.iteritems():
+            setattr(self, k, v)
+
         self.NEED_INSTALL = False
         self.NEED_UPGRADE = False
         self.DISABLE_OPERATIONS = False
         self.DATABASE_VERSION = 0
+
         self._logger = self.get_logger()
 
         self._iniconfigs = {}
@@ -44,7 +52,7 @@ class Config:
             db.execute("select var, value, type, env_overrides from config")
             rows = db.fetchall()
             if not rows:
-                self._logger.warn("Database has not been installed, before continuing you must run: ams internals database install")
+                self._logger.critical("Database has not been installed, before continuing you must run: ams internals database install")
                 self.NEED_INSTALL = True
                 return
             for row in rows:
@@ -71,14 +79,18 @@ class Config:
         except _mysql_exceptions.ProgrammingError as e:
             if e.args[0] == 1146:
                 self.NEED_INSTALL = True
-                self._logger.warn("Database has not been installed, before continuing you must run: ams internals database install")
+                self._logger.critical("Database has not been installed, before continuing you must run: ams internals database install")
                 return
+            else:
+                raise
 
         except _mysql_exceptions.OperationalError as e:
             if e.args[0] == 1054:
                 self.NEED_UPGRADE = True
-                self._logger.warn("Database needs to be updated, before continuing you must run: ams internals database upgrade")
+                self._logger.critical("Database needs to be updated, before continuing you must run: ams internals database upgrade")
                 return
+            else:
+                raise
 
 
         pass
@@ -148,12 +160,12 @@ class Config:
             if not self._using_legacy:
                 raise InvalidConfigFile("Config file {0} missing section: {1}".format(filename, str(e)))
             else:
-                self._logger.warn("Config file {0} missing section: {1}".format(filename, str(e)))
+                self._logger.critical("Config file {0} missing section: {1}".format(filename, str(e)))
         except ConfigParser.NoOptionError as e:
             if not self._using_legacy:
                 raise InvalidConfigFile("Config file {0} missing option: {1}".format(filename, str(e)))
             else:
-                self._logger.warn("Config file {0} missing option: {1}".format(filename, str(e)))
+                self._logger.critical("Config file {0} missing option: {1}".format(filename, str(e)))
 
         options = config.options('CONFIG')
         for option in options:
@@ -163,8 +175,8 @@ class Config:
     def get_logger(self):
         if not hasattr(self, '_logger'):
             self._logger = logging.getLogger('ams')
-            amsloglevel = getattr(logging, 'DEBUG')
-            globalloglevel = getattr(logging, 'CRITICAL')
+            amsloglevel = getattr(logging, self.AMS_LOGLEVEL)
+            globalloglevel = getattr(logging, self.GLOBAL_LOGLEVEL)
             logging.basicConfig(level=globalloglevel)
             self._logger.setLevel(level=amsloglevel)
         return self._logger
@@ -201,6 +213,12 @@ class Config:
             else:
                 finalsettings[k] = v
 
+        for k,v in self.override_values.iteritems():
+            if k in finalsettings:
+                finalsettings[k] = v or finalsettings[k]
+            else:
+                finalsettings[k] = v
+
         for k,v in finalsettings.iteritems():
             setattr(self, k, v)
 
@@ -214,3 +232,4 @@ class Config:
             if os.environ.has_key(key):
                 return os.environ.get(key)
         return dflt
+

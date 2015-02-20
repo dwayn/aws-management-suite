@@ -266,7 +266,7 @@ class InstanceManager(BaseManager):
         htagadd.add_argument('tagname', help="Name of the tag")
         htagadd.add_argument('tagvalue', help="Value of the tag")
         htagadd.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
-        htagadd.add_argument('-p', '--tag-type', choices=['standard', 'extended'], default='standard', help="Type of tag, standard tags are applied to the instance in AWS, extended tags only exist in the ams database to give you the ability to add tags beyond AWS limitations")
+        htagadd.add_argument('-p', '--tag-type', choices=['standard', 'extended', 'hostvar'], default='standard', help="Type of tag, standard tags are applied to the instance in AWS, extended tags only exist in the ams database to give you the ability to add tags beyond AWS limitations. Hostvars are variables that are only used by ams-inventory to add host variables into dynamic inventory.")
         htagadd.set_defaults(func=self.command_tag)
 
         # ams host tag edit

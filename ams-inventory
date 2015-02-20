@@ -1,0 +1,506 @@
+#!/usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
+
+import argcomplete
+import argparse
+import MySQLdb
+import re
+from amslib.core.version import DATABASE_VERSION
+from amslib.core.config import Config
+from amslib.core.manager import BaseManager
+from pprint import pprint
+try:
+    import json
+except ImportError:
+    import simplejson as json
+
+
+
+# overriding the log levels so that warning and below don't munge the json output
+settings = Config({'AMS_LOGLEVEL': 'CRITICAL', 'GLOBAL_LOGLEVEL': 'CRITICAL'})
+if settings.NEED_UPGRADE or settings.NEED_INSTALL or DATABASE_VERSION > settings.DATABASE_VERSION:
+    print "ams-inventory requires ams database to be up to date"
+    exit()
+
+
+class AmsInventory:
+
+    def _empty_inventory(self):
+        return {"_meta" : {"hostvars" : {}}}
+
+    def __init__(self):
+        self.dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
+                             port=settings.TRACKING_DB['port'],
+                             user=settings.TRACKING_DB['user'],
+                             passwd=settings.TRACKING_DB['pass'],
+                             db=settings.TRACKING_DB['dbname'])
+        self.db = self.dbconn.cursor(MySQLdb.cursors.DictCursor)
+        self.bm = BaseManager(settings)
+
+        self.templates = {}
+        self.inventory = self._empty_inventory()
+        self.names_map = {}
+        self.host_data = {}
+        self.network_map = {}
+        self.route53 = {}
+        self.tags = {}
+        self.host_vars = {}
+        self.print_inventory()
+
+
+    def _load_hosts(self):
+        self.db.execute("select instance_id, name, ip_internal, ip_external, hostname_internal, hostname_external, availability_zone, vpc_id, subnet_id, ami_id, instance_type from hosts where `terminated`=0")
+        rows = self.db.fetchall()
+        if not rows:
+            print "No host information found in AMS database, try running 'ams host discovery' first"
+            return
+        for row in rows:
+            self.host_data[row['instance_id']] = row
+            name = row['name'] or ''
+            if name not in self.names_map:
+                self.names_map[name] = []
+            self.names_map[name].append(row['instance_id'])
+            self.network_map[row['ip_internal']] = row['instance_id']
+            self.network_map[row['ip_external']] = row['instance_id']
+            self.network_map[row['hostname_internal']] = row['instance_id']
+            self.network_map[row['hostname_external']] = row['instance_id']
+
+
+
+    def _load_route53(self):
+        self.db.execute('select name, group_concat(resource_records separator "\n") as records from route53_records where type in ("A","CNAME") group by name,type')
+        rows = self.db.fetchall()
+        if not rows:
+            return
+        for row in rows:
+            instance_ids = []
+            for dest in row['records'].split("\n"):
+                if dest in self.network_map:
+                    instance_ids.append(self._format_name(self.network_map[dest]))
+            if len(instance_ids):
+                if row['name'] not in self.route53:
+                    self.route53[row['name']] = []
+                instance_ids += self.route53[row['name']]
+                self.route53[row['name']] = list(set(instance_ids))
+
+
+
+    def _load_tags(self):
+        self.db.execute('select resource_id, name, value, type from tags where resource_id like "i-%"')
+        rows = self.db.fetchall()
+        if not rows:
+            return
+        prev_id = None
+        tags = {}
+        for row in rows:
+            if prev_id != row['resource_id']:
+                if prev_id:
+                    self._apply_templates(self._format_name(prev_id), tags)
+                prev_id = row['resource_id']
+                tags = {}
+
+            name = self._format_name(row['resource_id'])
+            if row['type'] == 'standard' or row['type'] == 'extended':
+                tags[row['name']] = row['value']
+                k = "{0}_{1}".format(row['name'], row['value'])
+                if k not in self.tags:
+                    self.tags[k] = []
+                self.tags[k].append(name)
+            # TODO should all tags go into host vars?
+            if name not in self.inventory['_meta']['hostvars']:
+                self.inventory['_meta']['hostvars'][name] = {}
+            self.inventory['_meta']['hostvars'][name][row['name']] = row['value']
+
+
+    def _add_template(self, template, templatevars, templatefilters):
+        templatevars.sort()
+        curnode = self.templates
+        for tplvar in templatevars:
+            if tplvar not in curnode:
+                curnode[tplvar] = {}
+                curnode[tplvar]['{{templates}}'] = []
+            curnode = curnode[tplvar]
+        curnode['{{templates}}'].append((template, templatevars, templatefilters))
+
+
+    def _apply_templates(self, name, tags={}):
+        keys = tags.keys()
+        keys.sort()
+        results = []
+        self._get_templates(self.templates, keys, results)
+        for result in results:
+            templateok = True
+            group = result[0]
+            for i in range(len(result[1])):
+                token = result[1][i]
+                replacetoken = '{{'+token+'}}'
+                if result[2][i]:
+                    if result[2][i] == tags[token]:
+                        replacetoken = '{{'+token+'='+tags[token]+'}}'
+                    else:
+                        templateok = False
+                        break
+                group = group.replace(replacetoken, tags[token])
+
+            if not templateok:
+                continue
+            self._add_host(group, name)
+
+
+
+    def _get_templates(self, curnode, keys, results):
+        if '{{templates}}' in curnode and len(curnode['{{templates}}']):
+            results += curnode['{{templates}}']
+        if not len(keys):
+            return
+        for x in range(len(keys)):
+            if keys[x] in curnode:
+                self._get_templates(curnode[keys[x]], keys[x+1:], results)
+
+
+    def _load_templates(self):
+        self.db.execute("select template from inventory_group_templates")
+        rows = self.db.fetchall()
+        if rows:
+            for row in rows:
+                templatevars = []
+                templatefilters = []
+                parts = re.split('({{.*?}})', row['template'])
+                for part in parts:
+                    if re.search('{{.*?}}', part):
+                        token = part[2:-2]
+                        tokenparts = token.split('=')
+                        if len(tokenparts) == 1:
+                            templatevars.append(token)
+                            templatefilters.append(None)
+                        elif len(tokenparts) == 2:
+                            templatevars.append(tokenparts[0])
+                            templatefilters.append(tokenparts[1])
+                self._add_template(row['template'], templatevars, templatefilters)
+
+
+    def _load_group_data(self):
+        sql = "select g1.name as parent, g2.name as child " \
+              "from inventory_groups g1 " \
+              "left join inventory_group_map m on g1.inventory_group_id=m.parent_id " \
+              "left join inventory_groups g2 on g2.inventory_group_id=m.child_id "
+
+        self.db.execute(sql)
+        rows = self.db.fetchall()
+        if rows:
+            for row in rows:
+                if row['parent'] not in self.inventory:
+                    self.inventory[row['parent']] = {}
+                if 'hosts' not in self.inventory[row['parent']]:
+                    self.inventory[row['parent']]['hosts'] = []
+                if 'children' not in self.inventory[row['parent']]:
+                    self.inventory[row['parent']]['children'] = []
+                if row['child']:
+                    self.inventory[row['parent']]['children'].append(row['child'])
+
+
+
+
+    def _load_all_data(self):
+        self._load_templates()
+        self._load_group_data()
+        self._load_hosts()
+        self._load_tags()
+        self._load_route53()
+
+    def _make_node(self, group):
+        if group not in self.inventory:
+            self.inventory[group] = {}
+        if 'hosts' not in self.inventory[group]:
+            self.inventory[group]['hosts'] = []
+        if 'children' not in self.inventory[group]:
+            self.inventory[group]['children'] = []
+
+    def _add_child(self, group, child):
+        self._make_node(group)
+        if child not in self.inventory[group]['children']:
+            self.inventory[group]['children'].append(child)
+
+    def _add_host(self, group, host):
+        self._make_node(group)
+        if host not in self.inventory[group]['hosts']:
+            self.inventory[group]['hosts'].append(host)
+
+
+    def build_inventory(self):
+        self._load_all_data()
+        az = {}
+        regions = {}
+        vpcs = {}
+        subnets = {}
+        amis = {}
+        instance_types = {}
+        for instance_id in self.host_data:
+            name = self._format_name(instance_id)
+            host = self.host_data[instance_id]
+            ssh_host = None
+            external = None
+            if host['subnet_id']:
+                ssh_host = host['ip_internal']
+                external = host['ip_external']
+            else:
+                ssh_host = host['hostname_external']
+
+            if not ssh_host:
+                continue
+
+            # this is the root entry for the host
+            self.inventory[name] = {'ansible_ssh_host': ssh_host}
+
+            # mapping entry for the name
+            if host['name']:
+                self._add_host(host['name'], name)
+
+            # mapping entry for instance id
+            self.inventory[instance_id] = [ name ]
+
+
+
+            if external:
+                self.inventory[external] = [ name ]
+
+            # AZ
+            self._add_host(host['availability_zone'], name)
+
+            # region
+            region = self.bm.parse_region_from_availability_zone(host['availability_zone'])
+            self._add_child(region, host['availability_zone'])
+
+            # vpc
+            if host['vpc_id']:
+                self._add_host(host['vpc_id'], name)
+
+            # subnet
+            if host['subnet_id']:
+                self._add_host(host['subnet_id'], name)
+
+            # ami
+            self._add_host(host['ami_id'], name)
+
+            # instance type
+            self._add_host(host['instance_type'], name)
+
+        self.inventory.update(self.route53)
+        self.inventory.update(self.tags)
+
+
+    def json(self):
+        return json.dumps(self.inventory, sort_keys=True, indent=4)
+
+    def get_host_vars(self, host):
+        # if host is the full name, then it will just be returned back, if it is the instance id then it will be turned into the full name
+        host = self._format_name(host)
+        if host in self.inventory['_meta']['hostvars']:
+            return json.dumps(self.inventory['_meta']['hostvars'][host], sort_keys=True, indent=4)
+        else:
+            return json.dumps({}, sort_keys=True, indent=4)
+
+    def _format_name(self, instance_id):
+        if instance_id in self.host_data and self.host_data[instance_id]['name']:
+            return "{0}({1})".format(self.host_data[instance_id]['name'], instance_id)
+        else:
+            return instance_id
+
+    def list_groups(self, group_id=None):
+        sql = "select g1.name as parent, group_concat(g2.name order by g2.name asc separator '\n') as children " \
+              "from inventory_groups g1 " \
+              "left join inventory_group_map m on g1.inventory_group_id=m.parent_id " \
+              "left join inventory_groups g2 on g2.inventory_group_id=m.child_id {0} " \
+              "group by g1.inventory_group_id order by g1.name"
+        where = ''
+        queryvars = []
+        if group_id is not None:
+            queryvars.append(group_id)
+            where = " where g1.inventory_group_id=%s "
+        sql = sql.format(where)
+        self.db.execute(sql, queryvars)
+        rows = self.db.fetchall()
+        headers=['Group', 'Children']
+        data = []
+        count = 0
+        if rows:
+            for row in rows:
+                data.append((row['parent'], row['children']))
+                data.append((' ',' '))
+                count += 1
+        self.bm.output_formatted('Inventory Groups', headers, data, "{0} groups".format(count))
+
+    def list_templates(self, template_id=None):
+        sql = "select inventory_group_template_id as id, template from inventory_group_templates"
+        queryvars = []
+        if template_id is not None:
+            queryvars.append(template_id)
+            sql += " where inventory_group_template_id=%s"
+        sql += " order by template asc"
+        self.db.execute(sql, queryvars)
+        rows = self.db.fetchall()
+        headers=['Template ID', 'Template']
+        data = []
+        count = 0
+        if rows:
+            for row in rows:
+                data.append((row['id'], row['template']))
+                data.append((' ',' '))
+                count += 1
+        self.bm.output_formatted('Inventory Templates', headers, data, "{0} templates".format(count))
+
+    def edit_tag_template(self, template, template_id=None):
+        parts = re.split('({{.*?}})', template)
+        normalized_template = ''
+        for part in parts:
+            if re.search('{{.*?}}', part):
+                tplvar = part[2:-2].strip()
+                tplvarparts = tplvar.split('=')
+                if len(tplvarparts) == 1:
+                    normalized_template += '{{' + tplvar + '}}'
+                elif len(tplvarparts) == 2:
+                    normalized_template += '{{' + tplvarparts[0].strip() + '=' + tplvarparts[1].strip() + '}}'
+                else:
+                    print "Unable to parse template, error near: {0}".format(part)
+                    return
+            else:
+                normalized_template += part
+        template = normalized_template
+
+        if template_id is not None:
+            self.db.execute("insert into inventory_group_templates set inventory_group_template_id=%s, template=%s on duplicate key update template=%s", (template_id, template, template))
+            self.dbconn.commit()
+            print "Template updated"
+            self.list_templates(template_id)
+        else:
+            count = self.db.execute("insert into inventory_group_templates set template=%s on duplicate key update template=%s", (template, template))
+            self.dbconn.commit()
+            template_id = self.db.lastrowid
+            if count > 0:
+                print "Template created"
+                self.list_templates(template_id)
+            else:
+                print "Template updated"
+                self.db.execute("select inventory_group_template_id from inventory_group_templates where template=%s", (template, ))
+                row = self.db.fetchone()
+                if row:
+                    self.list_templates(row['inventory_group_template_id'])
+
+    def delete_tag_template(self, template_id):
+        self.db.execute("delete from inventory_group_templates where inventory_group_template_id=%s", (template_id, ))
+        self.dbconn.commit()
+        print "Template {0} deleted".format(template_id)
+
+
+    def add_group(self, group_name, children):
+        self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (group_name, ))
+        row = self.db.fetchone()
+        if not row or not row['id']:
+            self.db.execute("insert ignore into inventory_groups set name=%s", (group_name, ))
+            self.dbconn.commit()
+            self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (group_name, ))
+            row = self.db.fetchone()
+
+        if not row or not row['id']:
+            print "Unable to write to database to add group {0}".format(group_name)
+            return
+
+        parent = row['id']
+        for child in children:
+            self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (child, ))
+            row = self.db.fetchone()
+            if not row:
+                self.db.execute("insert ignore into inventory_groups set name=%s", (child, ))
+                self.dbconn.commit()
+                self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (child, ))
+                row = self.db.fetchone()
+                if not row or not row['id']:
+                    print "Unable to write to database to add children for group {0}".format(group_name)
+                    return
+            child = row['id']
+
+            self.db.execute("insert into inventory_group_map set parent_id=%s, child_id=%s on duplicate key update child_id=%s", (parent, child, child))
+            self.dbconn.commit()
+
+        self.list_groups(parent)
+
+    def delete_group(self, group_name):
+        self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (group_name, ))
+        row = self.db.fetchone()
+        if not row:
+            print "Group {0} not found".format(group_name)
+            return
+        group_id = row['id']
+
+        self.db.execute("delete from inventory_groups where inventory_group_id=%s", (group_id, ))
+        self.dbconn.commit()
+        self.db.execute("delete from inventory_group_map where parent_id=%s or child_id=%s", (group_id, group_id))
+        print "Group {0} deleted".format(group_name)
+
+    def remove_group_children(self, group_name, children):
+        self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (group_name, ))
+        row = self.db.fetchone()
+        if not row:
+            print "Group {0} not found".format(group_name)
+            return
+        parent = row['id']
+        for child in children:
+            self.db.execute("select inventory_group_id as id from inventory_groups where name=%s", (child, ))
+            row = self.db.fetchone()
+            if not row:
+                continue
+            child_id = row['id']
+
+            success = self.db.execute("delete from inventory_group_map where parent_id=%s and child_id=%s", (parent, child_id))
+            self.dbconn.commit()
+            if success:
+                print "Removed {0} from group {1}".format(child, group_name)
+
+        self.list_groups(parent)
+
+
+
+    def print_inventory(self):
+        parser = argparse.ArgumentParser(prog="ams-inventory", description="AMS based dynamic inventory for ansible")
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument('--list', action='store_true', help="Lists all of the hosts in ansible dynamic inventory format")
+        group.add_argument('--host', help="lists the hostvars for a single instance")
+        group.add_argument('--list-groups', action='store_true', help="List the additional configured groups for dynamic inventory")
+        group.add_argument('--list-tag-templates', action='store_true', help="Lists the configured group tagging templates")
+        group.add_argument('--add-tag-template', metavar='TEMPLATE', help="Add a new group tagging template. Eg. In the case of a server that is tagged with the tags env=stage and role=webserver and a template that is defined as '{{env}}-{{role}}', the dynamic inventory will add the host to a group with the name 'stage-webserver'. The template tags can also be filtered using the syntax '{{name=value}}'. Eg. a template '{{env=stage}}-{{role}}' would be applied to a host with env=stage and role=webserver, but not a host with env=prod and role=webserver.")
+        group.add_argument('--edit-tag-template', nargs=2, metavar=('TEMPLATE_ID', 'TEMPLATE'), help="Edit an existing group tagging template")
+        group.add_argument('--delete-tag-template', type=int, help="Delete a tag template", metavar='TEMPLATE_ID')
+        group.add_argument('--add-group', nargs='+', metavar=('GROUP_NAME', 'CHILD_NAME [CHILD_NAME]'), help="Add a new inventory group with name GROUP_NAME. Optionally include the child groups for GROUP_NAME. Note: this is an additive operation rather than replacement operation.")
+        group.add_argument('--delete-group', help="Remove an inventory group and its mapping of children", metavar="GROUP_NAME")
+        group.add_argument('--remove-group-children', nargs='+', help="Remove one or more children from a group", metavar=("GROUP_NAME", "CHILD_NAME [CHILD_NAME]"))
+
+        argcomplete.autocomplete(parser)
+        args = parser.parse_args()
+
+        if args.host:
+            self.build_inventory()
+            print self.get_host_vars(args.host)
+        elif args.list:
+            self.build_inventory()
+            print self.json()
+        elif args.list_groups:
+            self.list_groups()
+        elif args.list_tag_templates:
+            self.list_templates()
+        elif args.add_tag_template:
+            self.edit_tag_template(args.add_tag_template, None)
+        elif args.edit_tag_template:
+            self.edit_tag_template(args.edit_tag_template[1], args.edit_tag_template[0])
+        elif args.delete_tag_template:
+            self.delete_tag_template(args.delete_tag_template)
+        elif args.add_group:
+            self.add_group(args.add_group[0], args.add_group[1:])
+        elif args.delete_group:
+            self.delete_group(args.delete_group)
+        elif args.remove_group_children:
+            self.remove_group_children(args.remove_group_children[0], args.remove_group_children[1:])
+        else:
+            print "Argument(s) expected use -h/--help for usage"
+
+
+AmsInventory()

@@ -35,7 +35,6 @@ EBS Snapshots (managed as groups of snapshots)
 * schedule regular snapshots of volume/raid with managed grandfather/father/son expiration
 * automatable purging of expired snapshots
 
-
 Instance Management
 * Instances can be manually added or edited using `ams host add` or `ams host edit` respectively
 * Instance discovery has been implemented, allowing the hosts table to be automatically populated
@@ -47,6 +46,16 @@ Route53
 * create Route53 health checks
 * support for managing Simple, Weighted Round Robin, Failover, and Latency routing policies in Route53 records
 * delete DNS record
+
+Instance Tagging
+* Management of instance tags is supported with ability to add/edit/remove tags on single hosts or many with advanced tag based filtering
+
+[Ansible Integration](#cms_integration)
+* A dynamic inventory script has been added that uses the data in the AMS database to power your inventory needs for ansible
+* Dynamic inventory supports managing server group hierarchies (groups of groups and groups of servers)
+* Built in templating for combining tags on hosts into group names and adding hosts to these groups automatically
+ * Templating support includes filtering so that templates can apply to hosts with specific tag values
+* Command line management of groups and templates using same script that ansible uses as inventory
 
 ## Change Log
 Changes that are made are now being tracked in the [CHANGELOG](CHANGELOG.md)
@@ -83,10 +92,11 @@ In order from highest to lowest priority:
 ### Enabling bash/zsh completion
 This project makes use of the argcomplete library (https://github.com/kislyuk/argcomplete) to provide dynamic completion. As part of the pip installation,
 the library will be installed, but completion will still need to be enabled. Due to some multi-platform issues I experienced trying to enable global completeion,
-I opted to use specific completion. All that is needed is to add this line to your .bashrc, .profile or .bash_profile (depending on which your OS uses) and then reload
+I opted to use specific completion. All that is needed is to add these lines to your .bashrc, .profile or .bash_profile (depending on which your OS uses) and then reload
 your terminal or `source .bashrc` (or .profile or .bash_profile).
 
 `eval "$(register-python-argcomplete ams)"`
+`eval "$(register-python-argcomplete ams-inventory)"`
 
 ### Upgrading
 If you have updated the code base, just run `pip install -r requirements.txt` to install any new dependencies and run `ams internals database upgrade` to run the update scripts
@@ -1205,3 +1215,547 @@ This will install the database table for an initial install of AMS.
 This should be run every time that the software is updated to ensure that database schema matches the application's expectation.
 
 ----
+
+<a name="cms_integration"></a>
+
+
+# CMS Integrations
+==================
+
+## General
+
+The goal of AMS is not to replace standard configuration management systems (like puppet, chef, ansible, salt, etc), but rather to 
+augment these systems and provide tools that are missing or may be particularly cumbersome to use in the context of a CMS. CMSes are 
+particularly well suited for managing software configurations on hosts, but management of hardware (or virtualized hardware) in these 
+is limited. Most now support starting/stopping/terminating an instance but lack more advanced features for managing and tracking the other 
+components of the virtualized hardware infrastructure (storage, networking, etc).  
+
+AMS is a growing set of tools for managing virtual hardware, and in the process, it is also developing into a virtual hardware CMDB. The AMS 
+database now keeps track of enough information about EC2 infrastructure to use this data to begin integrating with other CMSes. 
+
+
+## Ansible Integration
+AMS now comes with a command line tool: `ams-inventory`. This script implements the `--list` and `--host` options required for an 
+ansible dynamic inventory file and outputs json in ansible's [dynamic inventory format](http://docs.ansible.com/intro_dynamic_inventory.html).
+
+To use ams-inventory with ansible commands just pass the path to ams-inventory with the `-i/--inventory` flag. Eg: `ansible -i /path/to/ams-inventory -m ping`
+
+
+### `ams-inventory` Options and Features
+
+Arguments:
+
+      -h, --help            show this help message and exit
+      --list                Lists all of the hosts in ansible dynamic inventory
+                            format
+      --host HOST           lists the hostvars for a single instance
+      --list-groups         List the additional configured groups for dynamic
+                            inventory
+      --list-tag-templates  Lists the configured group tagging templates
+      --add-tag-template TEMPLATE
+                            Add a new group tagging template. Eg. In the case of a
+                            server that is tagged with the tags env=stage and
+                            role=webserver and a template that is defined as
+                            '{{env}}-{{role}}', the dynamic inventory will add the
+                            host to a group with the name 'stage-webserver'. The
+                            template tags can also be filtered using the syntax
+                            '{{name=value}}'. Eg. a template
+                            '{{env=stage}}-{{role}}' would be applied to a host
+                            with env=stage and role=webserver, but not a host with
+                            env=prod and role=webserver.
+      --edit-tag-template TEMPLATE_ID TEMPLATE
+                            Edit an existing group tagging template
+      --delete-tag-template TEMPLATE_ID
+                            Delete a tag template
+      --add-group GROUP_NAME [CHILD_NAME [CHILD_NAME] ...]
+                            Add a new inventory group with name GROUP_NAME.
+                            Optionally include the child groups for GROUP_NAME.
+                            Note: this is an additive operation rather than
+                            replacement operation.
+      --delete-group GROUP_NAME
+                            Remove an inventory group and its mapping of children
+      --remove-group-children GROUP_NAME [CHILD_NAME [CHILD_NAME] ...]
+                            Remove one or more children from a group
+
+
+#### Features
+
+* Automatic addition of instances to groups based on the following:
+ * Tags on instances in the form `NAME_VALUE`, this includes AWS tags and AMS extended tags but not AMS hostvars type tags
+ * AWS Region
+ * AWS Availability Zone
+ * VPC ID
+ * Subnet ID (VPC subnet)
+ * AMI ID
+ * Instance Type (m1.small, c3.xlarge, etc)
+ * Name of instance (value of the Name tag on an instance)
+* Automatic addition of mappings for Route53 entries to hosts
+* Management of static group hierarchies that are included in the dynamic inventory
+* Management of templates that are applied to an instance's tags to include instance in a group
+
+----
+
+### Display Dynamic Inventory and Host Variables
+Ansible passes the `--list` option when executing ams-inventory to fetch the full dynamic inventory.Ansible typically 
+passes `--host HOSTNAME` to a dynamic inventory script to retrieve the hostvars for a host, but since this data included in the 
+primary dynamic inventory document, ansible does not use it. It is included for completeness and as a user tool to look at the 
+variables for a host.
+
+----
+
+### Static Group Hierarchy Management
+Static group hierarchies are equivalent to the `[group:children]` constructs in ansible inventory files. These hierarchies 
+can be managed in ams-inventory, ansible static inventory files, or a mix of both using ansible's ability to use a directory 
+path as the value for `-i/--inventory` option (there must be a script that executes ams-inventory or a symlink to ams-inventory 
+in the directory with the static inventory files). Groups can be a parent, a child, or both at once, as nested parent=&gt;child 
+relationships are supported. 
+
+
+#### `ams-inventory --list-groups`
+Displays a table of the currently configured group hierarchies
+
+**Example:**
+
+    $> ams-inventory --list-groups
+    
+    Inventory Groups:
+    +--------------------+--------------------+
+    | Group              | Children           |
+    +--------------------+--------------------+
+    | loadbalancer       | prod-loadbalancer  |
+    |                    | stage-loadbalancer |
+    |                    |                    |
+    | prod               | prod-loadbalancer  |
+    |                    | prod-webserver     |
+    |                    |                    |
+    | prod-loadbalancer  | ---                |
+    |                    |                    |
+    | prod-webserver     | ---                |
+    |                    |                    |
+    | stage              | stage-loadbalancer |
+    |                    | stage-webserver    |
+    |                    |                    |
+    | stage-loadbalancer | ---                |
+    |                    |                    |
+    | stage-webserver    | ---                |
+    |                    |                    |
+    | webserver          | prod-webserver     |
+    |                    | stage-webserver    |
+    |                    |                    |
+    +--------------------+--------------------+
+    8 groups
+
+
+_The above is equivalent to having an ansible inventory file with these definitions in it:_
+
+    [prod:children]
+    prod-loadbalancer
+    prod-webserver
+    
+    [stage:children]
+    stage-loadbalancer
+    stage-webserver
+    
+    [webserver:children]
+    prod-webserver
+    stage-webserver
+    
+    [loadbalancer:children]
+    prod-loadbalancer
+    stage-loadbalancer
+
+----
+
+#### `ams-inventory --add-group GROUP_NAME [CHILD_NAME [CHILD_NAME [...]]]`
+Add a new group to the groups table and optionally associates group with 1 or more child groups. The parent and child groups do not have 
+to already exist when creating the mapping as they will be created if needed. This operation is an additive operation so if you 
+already have a PARENT=&gt;CHILD_1 relationship and execute `ams-inventory --add-group PARENT CHILD_2` then you will now have both
+mappings: PARENT=&gt;CHILD_1 and PARENT=&gt;CHILD_2
+
+Required: GROUP_NAME
+
+Optional: 1 or more CHILD_NAMEs 
+
+
+**Example: Building the hierarchy defined in previous section using multiple different approaches to adding the relationships**
+
+    $> # adding prod group with no children
+    $> ams-inventory --add-group prod
+    
+    Inventory Groups:
+    +-------+--------------------+
+    | Group | Children           |
+    +-------+--------------------+
+    | prod  | ---                |
+    |       |                    |
+    +-------+--------------------+
+    1 groups
+
+
+    $> # adding prod-loadbalancer as child of prod 
+    $> ams-inventory --add-group prod prod-loadbalancer
+    
+    Inventory Groups:
+    +-------+--------------------+
+    | Group | Children           |
+    +-------+--------------------+
+    | prod  | prod-loadbalancer  |
+    |       |                    |
+    +-------+--------------------+
+    1 groups
+
+
+    $> # adding prod-webserver as child of prod 
+    $> ams-inventory --add-group prod prod-webserver
+    
+    Inventory Groups:
+    +-------+--------------------+
+    | Group | Children           |
+    +-------+--------------------+
+    | prod  | prod-loadbalancer  |
+    |       | prod-webserver     |
+    |       |                    |
+    +-------+--------------------+
+    1 groups
+
+
+    $> # adding loadbalancer group with stage-loadbalancer child
+    $> ams-inventory --add-group loadbalancer stage-loadbalancer
+
+    Inventory Groups:
+    +--------------+--------------------+
+    | Group        | Children           |
+    +--------------+--------------------+
+    | loadbalancer | stage-loadbalancer |
+    |              |                    |
+    +--------------+--------------------+
+    1 groups
+
+
+    $> # add prod-loadbalancer group
+    $> ams-inventory --add-group prod-loadbalancer
+
+    Inventory Groups:
+    +-------------------+----------+
+    | Group             | Children |
+    +-------------------+----------+
+    | prod-loadbalancer | ---      |
+    |                   |          |
+    +-------------------+----------+
+    1 groups
+
+
+    $> # add the prod-loadbalancer group as a child to the loadbalancer group
+    $> ams-inventory --add-group loadbalancer prod-loadbalancer
+
+    Inventory Groups:
+    +--------------+--------------------+
+    | Group        | Children           |
+    +--------------+--------------------+
+    | loadbalancer | prod-loadbalancer  |
+    |              | stage-loadbalancer |
+    |              |                    |
+    +--------------+--------------------+
+    1 groups
+    
+    
+    $> # adding each of the webserver child groups, followed by the parent relationship (intermediate output omitted for terseness)
+    $> ams-inventory --add-group stage-webserver
+    $> ams-inventory --add-group prod-webserver
+    $> ams-inventory --add-group webserver prod-webserver stage-webserver
+    
+    Inventory Groups:
+    +------------+------------------+
+    | Group      | Children         |
+    +------------+------------------+
+    | webserver  | prod-webserver   |
+    |            | stage-webserver  |
+    |            |                  |
+    +------------+------------------+
+    1 groups
+    
+    
+    $> # adding stage group with both children (this is the easiest and fastest method when defining groups)
+    $> ams-inventory --add-group stage stage-webserver stage-loadbalancer
+    
+    Inventory Groups:
+    +-------+--------------------+
+    | Group | Children           |
+    +-------+--------------------+
+    | stage | stage-loadbalancer |
+    |       | stage-webserver    |
+    |       |                    |
+    +-------+--------------------+
+    1 groups
+
+----
+
+#### `ams-inventory --remove-group-children GROUP_NAME [CHILD_NAME [CHILD_NAME [...]]]`
+Removes the relationship of 1 or more child groups with a parent group. This only removes the relationship, not the group 
+entirely, use --delete-group to completely remove a group and all of its relationships.
+
+**Example:**
+    
+    $> # remove a single child group from a parent
+    $> ams-inventory --remove-group-children loadbalancer prod-loadbalancer
+    Removed prod-loadbalancer from group loadbalancer
+    
+    Inventory Groups:
+    +--------------+--------------------+
+    | Group        | Children           |
+    +--------------+--------------------+
+    | loadbalancer | stage-loadbalancer |
+    |              |                    |
+    +--------------+--------------------+
+    1 groups
+    
+
+    $> # remove a multiple child groups from a parent
+    $> ams-inventory --remove-group-children loadbalancer prod-loadbalancer stage-loadbalancer
+    Removed prod-loadbalancer from group loadbalancer
+    Removed stage-loadbalancer from group loadbalancer
+    
+    
+    Inventory Groups:
+    +--------------+----------+
+    | Group        | Children |
+    +--------------+----------+
+    | loadbalancer | ---      |
+    |              |          |
+    +--------------+----------+
+    1 groups
+
+----
+
+#### `ams-inventory --delete-group GROUP_NAME`
+Deletes a group and all of its parent and child associations. Does not delete parents or children of the deleted group, only the relationships.
+
+**Example:**
+    
+    $> # delete a group that is a child in multiple groups 
+    $> ams-inventory --delete-group prod-loadbalancer
+    Group prod-loadbalancer deleted
+    $> ams-inventory --list-groups
+    
+    Inventory Groups:
+    +--------------------+--------------------+
+    | Group              | Children           |
+    +--------------------+--------------------+
+    | loadbalancer       | stage-loadbalancer |
+    |                    |                    |
+    | prod               | prod-webserver     |
+    |                    |                    |
+    | prod-webserver     | ---                |
+    |                    |                    |
+    | stage              | stage-loadbalancer |
+    |                    | stage-webserver    |
+    |                    |                    |
+    | stage-loadbalancer | ---                |
+    |                    |                    |
+    | stage-webserver    | ---                |
+    |                    |                    |
+    | webserver          | prod-webserver     |
+    |                    | stage-webserver    |
+    |                    |                    |
+    +--------------------+--------------------+
+    7 groups
+
+
+    $> # delete a group that is a parent of other groups 
+    $> ams-inventory --delete-group webserver
+    Group webserver deleted
+    $> ams-inventory --list-groups
+    
+    Inventory Groups:
+    +--------------------+--------------------+
+    | Group              | Children           |
+    +--------------------+--------------------+
+    | loadbalancer       | stage-loadbalancer |
+    |                    |                    |
+    | prod               | prod-webserver     |
+    |                    |                    |
+    | prod-webserver     | ---                |
+    |                    |                    |
+    | stage              | stage-loadbalancer |
+    |                    | stage-webserver    |
+    |                    |                    |
+    | stage-loadbalancer | ---                |
+    |                    |                    |
+    | stage-webserver    | ---                |
+    |                    |                    |
+    +--------------------+--------------------+
+    6 groups
+
+----
+
+### Tag Templates and Dynamic Group Assignment
+Templates can be defined that are applied to instance tags to create dynamic group names and add the instance to the dynamic 
+groups. Templates have two different forms: a basic form that is applied to any host that has all the tags defined in the 
+template and filtered templates that only apply to hosts that have all the tags and meet the required filter value(s). 
+
+
+#### Basic Tag Templates
+A tag template is simply a string that has any values that should be replaced by instance tags denoted by `{{TAG_NAME}}`
+
+**Example:**
+Given some hosts with the tags "env", "role" and "type", some examples of templates you could define are:
+
+* `{{env}}-{{role}}-{{type}}`
+* `{{env}}_{{role}}`
+* `foo-{{env}}-{{type}}`
+
+If you have 3 hosts with the following values for the tags:
+
+* hostA
+ * env = stage
+ * role = webserver
+ * type = api
+* hostB 
+ * env = production
+ * role = database
+ * type = primary
+ * cluster = backup
+* hostC
+ * env = dev
+ * role = webserver
+
+These would be rendered into the following group names for the hosts:
+
+* hostA
+ * `stage-webserver-api`
+ * `stage_webserver`
+ * `foo-stage-api`
+* hostB
+ * `production-database-primary`
+ * `production_database`
+ * `foo-production-primary`
+* hostC
+ * N/A (not all values for the template are present)
+ * `dev_webserver`
+ * N/A (not all values for the template are present)
+
+Each host will then be included in the groups for the templates that were fully rendered for that host.
+
+---
+
+#### Filtered Tag Templates
+Filtered tag templates enable filtering of what hosts the templates get applied to based on the tag values. The format for 
+filtered templates is `{{TAG_NAME=TAG_VALUE}}`
+
+**Example:**
+Given some hosts with the tags "env", "role" and "type", some examples of filtered templates you could define are:
+
+* `{{env=production}}-{{role}}-{{type}}`
+* `{{env=dev}}-{{role=database}}-combined`
+* `{{env}}_{{role}}_{{type=api}}_deprecated`
+
+If you have 3 hosts with the following values for the tags:
+
+* hostA
+ * env = dev
+ * role = webserver
+ * type = api
+* hostB 
+ * env = production
+ * role = database
+ * type = primary
+ * cluster = backup
+* hostC
+ * env = dev
+ * role = database
+ * type = primary
+ * cluster = backup
+
+These would be rendered into the following group names for the hosts:
+
+* hostA
+ * N/A (env != production)
+ * N/A (role != database)
+ * `dev_webserver_api_deprecated`
+* hostB
+ * `production-database-primary`
+ * N/A (env != production)
+ * N/A (type != api)
+* hostC
+ * N/A (env != production)
+ * `dev-database-combined`
+ * N/A (type != api)
+
+Each host will then be included in the groups for the templates that were fully rendered for that host.
+
+---
+
+#### `ams-inventory --list-tag-templates`
+Displays a table of the currently configured tag templates. This table contains the template ID and the template and 
+is sorted lexicographically by the contents of the template.
+
+**Example:**
+
+    $> ams-inventory --list-tag-templates
+    
+    Inventory Templates:
+    +-------------+----------------------------------+
+    | Template ID | Template                         |
+    +-------------+----------------------------------+
+    | 1           | {{env}}-{{role}}-{{role_type}}   |
+    |             |                                  |
+    | 12          | {{role=webserver}}-{{role_type}} |
+    |             |                                  |
+    +-------------+----------------------------------+
+    2 templates
+
+
+---
+
+#### `ams-inventory --add-tag-template TEMPLATE`
+Adds a new tag template to the database. `TEMPLATE` should be in the form of the above descriptions for basic and filtered 
+templates. After the template is normalized and added, the final version of the template will be displayed.
+ 
+**Example:**
+
+    $> ams-inventory --add-tag-template '{{env=production}}-{{role}}-{{type}}'
+    Template created
+    
+    Inventory Templates:
+    +-------------+--------------------------------------+
+    | Template ID | Template                             |
+    +-------------+--------------------------------------+
+    | 13          | {{env=production}}-{{role}}-{{type}} |
+    |             |                                      |
+    +-------------+--------------------------------------+
+    1 templates
+    
+---
+
+#### `ams-inventory --edit-tag-template TEMPLATE_ID TEMPLATE`
+Adds a new tag template to the database. `TEMPLATE_ID` can be found using `ams-inventory --list-tag-templates` 
+or from output of other operations. `TEMPLATE` should be in the form of the above descriptions for basic and filtered 
+templates. After the template is normalized and added, the final version of the template will be displayed.
+ 
+**Example:**
+
+    $> ams-inventory --edit-tag-template 13 '{{env=dev}}-{{role}}-{{type}}'
+    Template Updated
+    
+    Inventory Templates:
+    +-------------+-------------------------------+
+    | Template ID | Template                      |
+    +-------------+-------------------------------+
+    | 13          | {{env=dev}}-{{role}}-{{type}} |
+    |             |                               |
+    +-------------+-------------------------------+
+    1 templates
+    
+---
+
+#### `ams-inventory --delete-tag-template TEMPLATE_ID`
+Deletes a tag template that is stored in the database. `TEMPLATE_ID` can be found using `ams-inventory --list-tag-templates` 
+or from output of other operations.
+
+**Example:**
+
+    $> ams-inventory --delete-tag-template 13
+    Template 13 deleted
+    
+
+
