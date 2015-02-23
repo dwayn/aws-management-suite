@@ -577,6 +577,15 @@ class SnapshotManager(BaseManager):
     def discovery(self):
         self.logger.error("Snapshot discovery not implemented yet")
 
+
+    def argparse_stub(self):
+        return 'snapshot'
+
+
+    def argparse_help_text(self):
+        return 'EBS snapshot management operations'
+
+
     def argument_parser_builder(self, parser):
         ssubparser = parser.add_subparsers(title="action", dest='action')
         # ams snapshot create

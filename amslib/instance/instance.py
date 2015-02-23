@@ -197,6 +197,14 @@ class InstanceManager(BaseManager):
             self.logger.info("Hostname configured permanently on instance")
 
 
+    def argparse_stub(self):
+        return 'host'
+
+
+    def argparse_help_text(self):
+        return 'direct host/instance related operations'
+
+
     def argument_parser_builder(self, parser):
 
         hsubparser = parser.add_subparsers(title="action", dest='action')

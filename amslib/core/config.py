@@ -9,6 +9,7 @@ import pprint
 import _mysql_exceptions
 from version import *
 import boto
+from amslib.core.manager import BaseManager
 
 class Config:
 
@@ -43,6 +44,15 @@ class Config:
             self.DISABLE_OPERATIONS = True
 
         self._check_versions()
+        self.modules = {}
+
+
+    def register_module(self, ModuleInstance):
+        if not isinstance(ModuleInstance, BaseManager):
+            raise InvalidModule("Incompatible module {0}".format(ModuleInstance))
+
+        self.modules[ModuleInstance.argparse_stub()] = ModuleInstance
+
 
     def _check_versions(self):
         boto_version_parts = boto.__version__.split('.')

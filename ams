@@ -18,10 +18,10 @@ import pprint
 
 settings = Config()
 
-vm = VolumeManager(settings)
-snapmanager = SnapshotManager(settings)
-im = InstanceManager(settings)
-r53 = Route53Manager(settings)
+settings.register_module(VolumeManager(settings))
+settings.register_module(SnapshotManager(settings))
+settings.register_module(InstanceManager(settings))
+settings.register_module(Route53Manager(settings))
 
 amsroot = os.path.realpath(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename))
 
@@ -64,17 +64,10 @@ def main():
 
     # all of the operational command parsers should be in here to force internals tasks that need to be done
     if settings.DATABASE_VERSION == DATABASE_VERSION:
-        hparser = subparsers.add_parser("host", help="direct host/instance related operations")
-        im.build_argument_parser(hparser)
+        for module in settings.modules.values():
+            mparser = subparsers.add_parser(module.argparse_stub(), help=module.argparse_help_text())
+            module.build_argument_parser(mparser)
 
-        vparser = subparsers.add_parser("volume", help="EBS volume and software raid operations")
-        vm.build_argument_parser(vparser)
-
-        sparser = subparsers.add_parser("snapshot", help="EBS snapshot management operations")
-        snapmanager.build_argument_parser(sparser)
-
-        r53parser = subparsers.add_parser("route53", help="Route53 management operations")
-        r53.build_argument_parser(r53parser)
 
     iparser = subparsers.add_parser("internals", help="AMS internal managament")
     isubparser = iparser.add_subparsers(title="type", dest='type')

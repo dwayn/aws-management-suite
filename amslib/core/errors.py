@@ -15,3 +15,6 @@ class InvalidConfigFile(AMSError):
 
 class DependencyRequired(AMSError):
     pass
+
+class InvalidModule(AMSError):
+    pass

@@ -330,6 +330,14 @@ class Route53Manager(BaseManager):
             self.logger.info("Deleted health check {0} ({1})".format(healthcheck_id, row[0]))
 
 
+    def argparse_stub(self):
+        return "route53"
+
+
+    def argparse_help_text(self):
+        return 'Route53 management operations'
+
+
     def argument_parser_builder(self, parser):
         rsubparser = parser.add_subparsers(title="action", dest='action')
 

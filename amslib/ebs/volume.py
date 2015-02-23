@@ -686,6 +686,14 @@ class VolumeManager(BaseManager):
         self.logger.error("Volume discovery not implemented yet")
 
 
+    def argparse_stub(self):
+        return 'volume'
+
+
+    def argparse_help_text(self):
+        return 'EBS volume and software raid operations'
+
+
     def argument_parser_builder(self, parser):
 
         vsubparser = parser.add_subparsers(title="action", dest='action')

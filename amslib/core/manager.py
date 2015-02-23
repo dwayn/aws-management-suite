@@ -61,3 +61,10 @@ class BaseManager:
 
     def parse_region_from_availability_zone(self, availability_zone):
         return availability_zone[0:len(availability_zone) - 1]
+
+    def argparse_stub(self):
+        raise NotImplemented('argparse_stub() must be implemented for dynamic modules')
+
+    def argparse_help_text(self):
+        return ''
+
