@@ -1,7 +1,7 @@
 import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
-from amslib.core.argparse import SmartFormatter
+from amslib.core.formatter import ArgParseSmartFormatter
 from amslib.ssh.sshmanager import SSHManager
 from errors import *
 import time
@@ -267,11 +267,11 @@ class InstanceManager(BaseManager):
         htagsubparser = htagparser.add_subparsers(title="operation", dest='operation')
 
         # ams host tag list
-        htaglist = htagsubparser.add_parser('list', help="List instance tags", parents=[htagargs], formatter_class=SmartFormatter)
+        htaglist = htagsubparser.add_parser('list', help="List instance tags", parents=[htagargs], formatter_class=ArgParseSmartFormatter)
         htaglist.set_defaults(func=self.command_tag)
 
         # ams host tag add
-        htagadd = htagsubparser.add_parser('add', help="Add tag to an instance or group of instances", parents=[htagargs], formatter_class=SmartFormatter)
+        htagadd = htagsubparser.add_parser('add', help="Add tag to an instance or group of instances", parents=[htagargs], formatter_class=ArgParseSmartFormatter)
         htagadd.add_argument('tagname', help="Name of the tag")
         htagadd.add_argument('tagvalue', help="Value of the tag")
         htagadd.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
@@ -279,7 +279,7 @@ class InstanceManager(BaseManager):
         htagadd.set_defaults(func=self.command_tag)
 
         # ams host tag edit
-        htagedit = htagsubparser.add_parser('edit', help="Edit tag on an instance or group of instances", parents=[htagargs], formatter_class=SmartFormatter)
+        htagedit = htagsubparser.add_parser('edit', help="Edit tag on an instance or group of instances", parents=[htagargs], formatter_class=ArgParseSmartFormatter)
         htagedit.add_argument('tagname', help="Name of the tag")
         htagedit.add_argument('tagvalue', help="Value of the tag")
         htagedit.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
@@ -287,7 +287,7 @@ class InstanceManager(BaseManager):
         htagedit.set_defaults(func=self.command_tag)
 
         # ams host tag delete
-        htagdelete = htagsubparser.add_parser('delete', help="Delete a tag from an instance or group of instances", parents=[htagargs], formatter_class=SmartFormatter)
+        htagdelete = htagsubparser.add_parser('delete', help="Delete a tag from an instance or group of instances", parents=[htagargs], formatter_class=ArgParseSmartFormatter)
         htagdelete.add_argument('tagname', help="Name of the tag")
         htagdelete.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
         htagdelete.set_defaults(func=self.command_tag)
