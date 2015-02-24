@@ -1,20 +1,12 @@
 import boto.ec2
 import argparse
 from amslib.core.manager import BaseManager
+from amslib.core.argparse import SmartFormatter
 from amslib.ssh.sshmanager import SSHManager
 from errors import *
 import time
 from pprint import pprint
 
-# borrowed from http://stackoverflow.com/questions/4375327/python-argparse-preformatted-help-text
-#TODO this should probably go somewhere central so that it can be used by other modules if needed
-class SmartFormatter(argparse.HelpFormatter):
-
-    def _split_lines(self, text, width):
-        # this is the RawTextHelpFormatter._split_lines
-        if text.startswith('R|'):
-            return text[2:].splitlines()
-        return argparse.HelpFormatter._split_lines(self, text, width)
 
 class InstanceManager(BaseManager):
 
