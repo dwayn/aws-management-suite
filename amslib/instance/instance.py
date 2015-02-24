@@ -26,9 +26,18 @@ class InstanceManager(BaseManager):
     def discover(self, get_unames = False):
         regions = boto.ec2.regions()
         instance_ids = []
+        self.db.execute("update availability_zones set active=0")
+        self.dbconn.commit()
         for region in regions:
             self.logger.info("Processing region {0}".format(region.name))
             botoconn = self.__get_boto_conn(region.name)
+            try:
+                zones = botoconn.get_all_zones()
+                for zone in zones:
+                    self.db.execute("insert into availability_zones set availability_zone=%s, region=%s, active=1 on duplicate key update active=1", (zone.name, region.name))
+                    self.dbconn.commit()
+            except:
+                pass
             self.logger.info("Getting instances")
             try:
                 instances = botoconn.get_only_instances()

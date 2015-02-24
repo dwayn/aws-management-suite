@@ -3,7 +3,7 @@ import argparse
 import prettytable
 import logging
 
-class BaseManager:
+class BaseManager(object):
     def __init__(self, settings):
         self.settings = settings
         self.dbconn = MySQLdb.connect(host=self.settings.TRACKING_DB['host'],
