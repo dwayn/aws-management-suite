@@ -1,6 +1,14 @@
 aws-management-suite Change Log
 ===============================
 
+### Februrary 26, 2015
+* Added new module network accessible via `ams network`
+ * Added discovery for security groups
+ * Added list functionality for security groups
+* Added module for argcomplete to start adding functions so that bash completion also includes values from the database in its completions
+ * Database value completion implemented for `ams network`
+* Host discovery now also loads all AWS regions and availability zones into the AMS database
+
 ### February 20, 2015
 * Removed the monkey patches for boto libraries related to Route53 healthchecks and failover records
 * Increased the minimum required version of boto to 2.36.0

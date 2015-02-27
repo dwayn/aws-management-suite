@@ -38,6 +38,7 @@ EBS Snapshots (managed as groups of snapshots)
 Instance Management
 * Instances can be manually added or edited using `ams host add` or `ams host edit` respectively
 * Instance discovery has been implemented, allowing the hosts table to be automatically populated
+* Regions and availability_zones information imported into AMS database 
 
 Route53
 * Discovery has been implemented to synchronize the local database with the current state of Route53 DNS records and health checks
@@ -49,6 +50,10 @@ Route53
 
 Instance Tagging
 * Management of instance tags is supported with ability to add/edit/remove tags on single hosts or many with advanced tag based filtering
+
+Networking
+* Discovery has been implemented to gather the information on security groups and their association across all regions
+* Tools for viewing security groups 
 
 [Ansible Integration](#cms_integration)
 * A dynamic inventory script has been added that uses the data in the AMS database to power your inventory needs for ansible
@@ -1037,6 +1042,34 @@ Arguments:
 ----
 
 ## Networking
+### General
+#### `ams network discovery`
+Gathers information on security groups, security group ingress and egress rules, and security group associations with instances. With no arguments, 
+discovery will run across all regions.
+
+Arguments:
+
+      -r REGION, --region REGION
+                            Limit discover to given region
+
+-----
+
+#### `ams network security_groups list`
+Lists security groups. Results can be filtered on region, name, security group id, and/or vpc id; all security groups across all 
+regions will be listed if no optional arguments are provided.   
+
+Arguments:
+
+          -r REGION, --region REGION
+                                Filter security groups by region
+          -s SECURITY_GROUP, --security-group SECURITY_GROUP
+                                Filter by security group id
+          -n NAME, --name NAME  Filter by security group name
+          -v VPC, --vpc VPC     Filter by VPC id
+
+
+
+
 ### Route53
 #### `ams route53 discovery`
 Reads the Route53 dns configurations and maps the hostnames defined in dns to the hosts in the hosts table. Currently this will pull all the records from dns down

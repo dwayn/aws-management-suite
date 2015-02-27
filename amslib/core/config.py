@@ -21,6 +21,10 @@ class Config:
         for k,v in override_values.iteritems():
             setattr(self, k, v)
 
+        if self.env('_ARGCOMPLETE', 0):
+            self.AMS_LOGLEVEL = 'CRITICAL'
+            self.GLOBAL_LOGLEVEL = 'CRITICAL'
+
         self.NEED_INSTALL = False
         self.NEED_UPGRADE = False
         self.DISABLE_OPERATIONS = False

@@ -396,7 +396,7 @@ class InstanceManager(BaseManager):
                 if self.settings.HUMAN_OUTPUT and result[0] == last_instance_id:
                     result[0] = result[1] = result[2] = ' '
                 else:
-                    if last_instance_id:
+                    if last_instance_id and self.settings.HUMAN_OUTPUT:
                         results.append([' ', ' ', ' ', ' ', ' ', ' '])
                     last_instance_id = result[0]
                     instance_count += 1

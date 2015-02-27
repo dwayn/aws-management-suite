@@ -25,7 +25,7 @@ class BaseManager(object):
         raise NotImplementedError("argument_parser_builder not implemented")
 
 
-    def output_formatted(self, table_title, column_headers, data, summary_text=None):
+    def output_formatted(self, table_title, column_headers, data, summary_text=None, insert_breaks=0):
         def tstr(x):
             if x is not None:
                 return str(x)
@@ -39,6 +39,8 @@ class BaseManager(object):
             table.align = 'l'
             for row in data:
                 table.add_row(map(tstr, row))
+                for x in range(insert_breaks):
+                    table.add_row([' '] * len(row))
             print table
             if summary_text:
                 print "{0}\n".format(summary_text)
