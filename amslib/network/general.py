@@ -25,12 +25,6 @@ class NetworkManager(BaseManager):
             try:
                 botoconn = self.__get_boto_conn(region.name)
                 self.logger.info("Processing region: {0}".format(region.name))
-
-                addresses = botoconn.get_all_addresses()
-                for address in addresses:
-                    print address
-                continue
-
                 security_groups = botoconn.get_all_security_groups()
                 self.logger.debug("Setting active=0 for {0}".format(region.name))
                 self.db.execute("update security_groups set active=0 where region=%s", (region.name, ))
