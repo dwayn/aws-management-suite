@@ -17,7 +17,6 @@ class InstanceManager(BaseManager):
         return self.boto_conns[region]
 
     def __subinit__(self):
-        print 'hellop'
         self.instance_types = [
             # Instance Types listed here: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html
             # current gen
