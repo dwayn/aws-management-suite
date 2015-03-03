@@ -30,6 +30,19 @@ class InstanceManager(BaseManager):
                     self.dbconn.commit()
             except:
                 pass
+
+            self.db.execute("update key_pairs set active=0 where region=%s",(region.name, ))
+            self.dbconn.commit()
+            try:
+                keypairs = botoconn.get_all_key_pairs()
+                for kp in keypairs:
+                    self.db.execute("insert into key_pairs set region=%s, key_name=%s, fingerprint=%s, active=1 on duplicate key update fingerprint=%s, active=1", (region.name, kp.name, kp.fingerprint, kp.fingerprint))
+                    self.dbconn.commit()
+            except:
+                pass
+            self.db.execute("delete from key_pairs where region=%s and active=0", (region.name, ))
+            self.dbconn.commit()
+
             self.logger.info("Getting instances")
             try:
                 instances = botoconn.get_only_instances()
@@ -58,11 +71,11 @@ class InstanceManager(BaseManager):
 
                 self.db.execute("insert into hosts set instance_id=%s, host=%s, hostname_internal=%s, hostname_external=%s, "
                                 "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s, uname=%s, vpc_id=%s, "
-                                "subnet_id=%s on duplicate key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
-                                "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s), vpc_id=%s, subnet_id=%s", (i.id, hn, hint, hext,
+                                "subnet_id=%s, key_name=%s on duplicate key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
+                                "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s), vpc_id=%s, subnet_id=%s, key_name=%s", (i.id, hn, hint, hext,
                                                                             i.private_ip_address, i.ip_address, i.image_id, i.instance_type,
-                                                                            i.placement, name, uname, i.vpc_id, i.subnet_id, hint, hext, i.private_ip_address,
-                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name, hn, i.vpc_id, i.subnet_id))
+                                                                            i.placement, name, uname, i.vpc_id, i.subnet_id, i.key_name, hint, hext, i.private_ip_address,
+                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name, hn, i.vpc_id, i.subnet_id, i.key_name))
                 self.dbconn.commit()
                 self.store_ec2_tags(i)
 
