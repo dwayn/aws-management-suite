@@ -3,7 +3,6 @@
 import argparse
 import argcomplete
 import MySQLdb
-#import settings
 import inspect
 import os
 import logging
@@ -66,7 +65,7 @@ def main():
 
     # all of the operational command parsers should be in here to force internals tasks that need to be done
     if settings.DATABASE_VERSION == DATABASE_VERSION:
-        for module in settings.modules.values():
+        for name, module in settings.modules.iteritems():
             mparser = subparsers.add_parser(module.argparse_stub(), help=module.argparse_help_text())
             module.build_argument_parser(mparser)
 
@@ -88,7 +87,7 @@ def main():
 
 
     if args.scriptable_output:
-        settings.HUMAN_OUPUT = False
+        settings.HUMAN_OUTPUT = False
     try:
         args.func(args)
     except Exception as e:
@@ -99,5 +98,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

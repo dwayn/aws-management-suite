@@ -389,8 +389,18 @@ Arguments:
 
 ----
 
+#### `ams host keys list`
+Lists information about the ssh key pairs that are available 
+
+Arguments:
+    
+      -r REGION, --region REGION
+                            AWS region name
+
+----
+
 #### `ams host discovery`
-Runs host discovery to populate the hosts table automatically
+Runs host discovery to populate the hosts table, as well as other support tables, automatically
 
 Arguments: None
 

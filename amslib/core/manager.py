@@ -14,6 +14,11 @@ class BaseManager(object):
         self.db = self.dbconn.cursor()
         self.logger = self.get_logger()
         self.boto_conns = {}
+        self.__subinit__()
+
+    def __subinit__(self):
+        ''' Called  by the constructor to allow subclasses to have their own unique constructors '''
+        pass
 
     def build_argument_parser(self, parser):
         if not isinstance(parser, argparse.ArgumentParser):

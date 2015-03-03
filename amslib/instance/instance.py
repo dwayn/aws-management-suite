@@ -3,6 +3,7 @@ import argparse
 from amslib.core.manager import BaseManager
 from amslib.core.formatter import ArgParseSmartFormatter
 from amslib.ssh.sshmanager import SSHManager
+from amslib.core.completion import ArgumentCompletion
 from errors import *
 import time
 from pprint import pprint
@@ -14,6 +15,24 @@ class InstanceManager(BaseManager):
         if region not in self.boto_conns:
             self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
         return self.boto_conns[region]
+
+    def __subinit__(self):
+        print 'hellop'
+        self.instance_types = [
+            # Instance Types listed here: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html
+            # current gen
+            't2.micro','t2.small','t2.medium','m3.medium','m3.large','m3.xlarge','m3.2xlarge',
+            'c4.large','c4.xlarge','c4.2xlarge','c4.4xlarge','c4.8xlarge','c3.large','c3.xlarge','c3.2xlarge','c3.4xlarge','c3.8xlarge',
+            'r3.large','r3.xlarge','r3.2xlarge','r3.4xlarge','r3.8xlarge',
+            'i2.xlarge','i2.2xlarge','i2.4xlarge','i2.8xlarge','hs1.8xlarge',
+            'g2.2xlarge'
+            # previous gen
+            't1.micro','m1.small','m1.medium','m1.large','m1.xlarge',
+            'c1.medium','c1.xlarge','cc2.8xlarge',
+            'm2.xlarge','m2.2xlarge','m2.4xlarge',
+            'cr1.8xlarge','hi1.4xlarge',
+            'cg1.4xlarge'
+        ]
 
     def discover(self, get_unames = False):
         regions = boto.ec2.regions()
@@ -220,6 +239,7 @@ class InstanceManager(BaseManager):
 
 
     def argument_parser_builder(self, parser):
+        ac = ArgumentCompletion(self.settings)
 
         hsubparser = parser.add_subparsers(title="action", dest='action')
 
@@ -229,7 +249,7 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument('field_value', nargs="?", help="exact match search value")
         hlistparser.add_argument("--like", help="string to find within 'search-field'")
         hlistparser.add_argument("--prefix", help="string to prefix match against 'search-field'")
-        hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'")
+        hlistparser.add_argument("--zone", help="Availability zone to filter results by. This is a prefix search so any of the following is valid with increasing specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'").completer = ac.availability_zone
         hlistparser.add_argument("-x", "--extended", help="Show extended information on hosts", action='store_true')
         hlistparser.add_argument("-a", "--all", help="Include terminated instances (that have been added via discovery)", action='store_true')
         hlistparser.add_argument("--terminated", help="Show only terminated instances (that have been added via discovery)", action='store_true')
@@ -237,14 +257,14 @@ class InstanceManager(BaseManager):
         hlistparser.set_defaults(func=self.command_host_list)
 
         addeditargs = argparse.ArgumentParser(add_help=False)
-        addeditargs.add_argument('-i', '--instance', help="Instance ID of the instance to add", required=True)
+        addeditargs.add_argument('-i', '--instance', help="Instance ID of the instance to add", required=True).completer = ac.instance_id
         addeditargs.add_argument('-u', '--uname', help="Hostname to use when setting uname on the host (default is to use instance hostname)")
         addeditargs.add_argument('--hostname-internal', help="Internal hostname (stored but not currently used)")
         addeditargs.add_argument('--hostname-external', help="External hostname (stored but not currently used)")
         addeditargs.add_argument('--ip-internal', help="Internal IP address (stored but not currently used)")
         addeditargs.add_argument('--ip-external', help="External IP address (stored but not currently used)")
         addeditargs.add_argument('--ami-id', help="AMI ID (stored but not currently used)")
-        addeditargs.add_argument('--instance-type', help="Instance type (stored but not currently used)")
+        addeditargs.add_argument('--instance-type', help="Instance type (stored but not currently used)", metavar='INSTANCE_TYPE', choices=self.instance_types)
         addeditargs.add_argument('--notes', help="Notes on the instance/host (stored but not currently used)")
         addeditargs.add_argument('--name', help="Name of the host (should match the 'Name' tag in EC2 for the instance)")
 
@@ -258,7 +278,7 @@ class InstanceManager(BaseManager):
         heditparser = hsubparser.add_parser("edit", help="Edit host details in the database. Values can be passed as an empty string ('') to nullify them", parents=[addeditargs])
         heditparser.add_argument('-H', '--hostname', help="Hostname of the host (used to ssh to the host to do management)")
         heditparser.add_argument('--configure-hostname', action='store_true', help="Set the hostname on the host to the FQDN that is currently the hostname or the uname that is currently defined for the instance in AMS (uname will override FQDN)")
-        heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in")
+        heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in").completer = ac.availability_zone
         heditparser.set_defaults(func=self.command_host_edit)
 
         discparser = hsubparser.add_parser("discovery", help="Run discovery on hosts/instances to populate database with resources")
@@ -271,7 +291,7 @@ class InstanceManager(BaseManager):
         htagargs.add_argument('--like', help="For host/name identification, searches for instances that contain the given string", action='store_true')
         htagargs.add_argument('-t', '--tag', help="R|Filter instances by tag, in the form name<OPERATOR>value.\nValid operators: \n\t=\t(equal)\n\t!=\t(not equal)\n\t=~\t(contains/like)\n\t!=~\t(not contains/not like)\n\t=:\t(prefixed by)\n\t!=:\t(not prefixed by)\nEg. To match Name tag containing 'foo': --tag Name=~foo", action='append')
         htaggroup = htagargs.add_mutually_exclusive_group()
-        htaggroup.add_argument('-i', '--instance', help="instance_id of an instance to manage tags")
+        htaggroup.add_argument('-i', '--instance', help="instance_id of an instance to manage tags").completer = ac.instance_id
         htaggroup.add_argument('-H', '--host', help="hostname of an instance to manage tags")
         htaggroup.add_argument('-e', '--name', help="name of an instance to manage tags")
 
@@ -305,6 +325,26 @@ class InstanceManager(BaseManager):
         htagdelete.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
         htagdelete.set_defaults(func=self.command_tag)
 
+        # ams key list
+        hkeyparser = hsubparser.add_parser('keys', help="Management of Key Pairs")
+        hkeyparser.add_argument('command', help="Command to run", choices=['list'])
+        hkeyparser.add_argument('-r', '--region', help="AWS region name").completer = ac.region
+        hkeyparser.set_defaults(func=self.command_key)
+
+
+    def command_key(self, args):
+        if args.command == 'list':
+            where = ''
+            wherevars = []
+            if args.region:
+                where = 'where region=%s'
+                wherevars.append(args.region)
+            self.db.execute("select region, key_name, fingerprint from key_pairs {0}".format(where), wherevars)
+            rows = self.db.fetchall()
+            if not rows:
+                rows = []
+            headers = ['region', 'key_name', 'fingerprint']
+            self.output_formatted("Key Pairs", headers, rows, None, 1)
 
 
     def command_tag(self, args):

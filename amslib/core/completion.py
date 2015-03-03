@@ -37,6 +37,7 @@ class ArgumentCompletion(BaseManager):
     def availability_zone(self, **kwargs):
         return self._general_db_completion('availability_zones', 'availability_zone', False)
 
-
+    def instance_id(self, **kwargs):
+        return self._general_db_completion('hosts', 'instance_id', False)
 
 
