@@ -25,6 +25,17 @@ class NetworkManager(BaseManager):
             try:
                 botoconn = self.__get_boto_conn(region.name)
                 self.logger.info("Processing region: {0}".format(region.name))
+
+                addresses = botoconn.get_all_addresses()
+                self.db.execute("update elastic_ips set active=0 where region=%s", (region.name, ))
+                self.dbconn.commit()
+                for a in addresses:
+                    qryvals = [a.public_ip, region.name, a.instance_id, a.domain, a.allocation_id, a.association_id, a.network_interface_id, a.private_ip_address, region.name, a.instance_id, a.domain, a.allocation_id, a.association_id, a.network_interface_id, a.private_ip_address]
+                    self.db.execute("insert into elastic_ips set public_ip=%s, region=%s, instance_id=%s, domain=%s, allocation_id=%s, association_id=%s, network_interface_id=%s, private_ip=%s on duplicate key update region=%s, instance_id=%s, domain=%s, allocation_id=%s, association_id=%s, network_interface_id=%s, private_ip=%s", qryvals)
+                    self.dbconn.commit()
+                self.db.execute("delete from elastic_ips where region=%s and active=0", (region.name, ))
+                self.dbconn.commit()
+
                 security_groups = botoconn.get_all_security_groups()
                 self.logger.debug("Setting active=0 for {0}".format(region.name))
                 self.db.execute("update security_groups set active=0 where region=%s", (region.name, ))
@@ -125,8 +136,25 @@ class NetworkManager(BaseManager):
         sglistparser.add_argument('-v', '--vpc', help="Filter by VPC id").completer = ac.security_group_vpc
         sglistparser.set_defaults(func=self.command_sg_list)
 
+        eipparser = rsubparser.add_parser("elastic_ips", help="Elastic IP operations")
+        eipsubparsers = eipparser.add_subparsers(title='subaction', dest='subaction')
 
+        eiplistparser = eipsubparsers.add_parser("list", help="List elastic IPs")
+        eiplistparser.add_argument('-r', '--region', help="Filter elastic IPs by region").completer = ac.region
+        eiplistparser.set_defaults(func=self.command_eip_list)
 
+    def command_eip_list(self, args):
+        where = ''
+        wherevals = []
+        if args.region:
+            where = 'where elastic_ips.region=%s'
+            wherevals.append(args.region)
+        self.db.execute("select public_ip, region, concat(hosts.name, ' (',elastic_ips.instance_id,')'), domain, private_ip from elastic_ips left join hosts using(instance_id) {0}".format(where), wherevals)
+        rows = self.db.fetchall()
+        if not rows:
+            rows = []
+        headers = ['Public IP', 'Region', 'Host', 'Domain', 'Private IP']
+        self.output_formatted('Elastic IP Addresses', headers, rows, None, 1)
 
     def command_discover(self, args):
         self.discovery(args.region)

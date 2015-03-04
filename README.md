@@ -1077,8 +1077,17 @@ Arguments:
           -n NAME, --name NAME  Filter by security group name
           -v VPC, --vpc VPC     Filter by VPC id
 
+----
 
+#### `ams network elastic_ips list`
+Lists allocated elastic IP addresses. Results can be filtered by region
 
+Arguments:
+
+      -r REGION, --region REGION
+                            Filter elastic IPs by region
+
+----
 
 ### Route53
 #### `ams route53 discovery`

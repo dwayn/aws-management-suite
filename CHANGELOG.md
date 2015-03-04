@@ -1,6 +1,14 @@
 aws-management-suite Change Log
 ===============================
 
+### March 3, 2015
+* Added collection of Security Group information to network discovery
+ * Added `ams network security_groups list` command to list available security groups
+* Added collection allocated elastic IP addresses to network discovery
+ * Added `ams network elastic_ips list` command to list elastic IP addresses
+* Added collection ssh keypair data in host discovery
+ * Added `ams host keys list` command  to list the available key pairs
+
 ### Februrary 26, 2015
 * Added new module network accessible via `ams network`
  * Added discovery for security groups
