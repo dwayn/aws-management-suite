@@ -399,10 +399,23 @@ Arguments:
 
 ----
 
+#### `ams host ami list`
+Lists information on the available AMIs
+
+Arguments:
+
+      -r REGION, --region REGION
+                            Filter by region
+
+----
+
 #### `ams host discovery`
 Runs host discovery to populate the hosts table, as well as other support tables, automatically
 
 Arguments: None
+
+      -r REGION, --region REGION
+                            Filter by region
 
 ----
 

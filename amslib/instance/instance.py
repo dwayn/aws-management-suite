@@ -7,6 +7,7 @@ from amslib.core.completion import ArgumentCompletion
 from errors import *
 import time
 from pprint import pprint
+import json
 
 
 class InstanceManager(BaseManager):
@@ -48,6 +49,64 @@ class InstanceManager(BaseManager):
                     self.dbconn.commit()
             except:
                 pass
+
+            try:
+
+                images = botoconn.get_all_images(owners=['self'])
+                self.db.execute('update amis set active=0 where region=%s', (region.name, ))
+                self.dbconn.commit()
+                for i in images:
+                    #TODO this is getting ridiculous...I think it is time to write a nice insert/update helper that takes a table name and dict of column values to make these much cleaner
+                    sql = "insert into amis set ami_id=%s, region=%s, name=%s, description=%s, location=%s, state=%s, owner_id=%s, " \
+                          "owner_alias=%s, is_public=%s, architecture=%s, platform=%s, type=%s, kernel_id=%s, ramdisk_id=%s, " \
+                          "product_codes=%s, billing_products=%s, root_device_type=%s, root_device_name=%s, virtualization_type=%s, " \
+                          "hypervisor=%s, sriov_net_support=%s, active=1 on duplicate key update " \
+                          "region=%s, name=%s, description=%s, location=%s, state=%s, owner_id=%s, " \
+                          "owner_alias=%s, is_public=%s, architecture=%s, platform=%s, type=%s, kernel_id=%s, ramdisk_id=%s, " \
+                          "product_codes=%s, billing_products=%s, root_device_type=%s, root_device_name=%s, virtualization_type=%s, " \
+                          "hypervisor=%s, sriov_net_support=%s, active=1"
+
+                    insertvars = [
+                        i.id, region.name, i.name, i.description, i.location, i.state, i.owner_id, i.owner_alias, i.is_public,
+                        i.architecture, i.platform, i.type, i.kernel_id, i.ramdisk_id, json.dumps(i.product_codes), json.dumps(i.billing_products),
+                        i.root_device_type, i.root_device_name, i.virtualization_type, i.hypervisor, i.sriov_net_support,
+                        region.name, i.name, i.description, i.location, i.state, i.owner_id, i.owner_alias, i.is_public,
+                        i.architecture, i.platform, i.type, i.kernel_id, i.ramdisk_id, json.dumps(i.product_codes), json.dumps(i.billing_products),
+                        i.root_device_type, i.root_device_name, i.virtualization_type, i.hypervisor, i.sriov_net_support
+                    ]
+                    self.db.execute(sql, insertvars)
+                    self.dbconn.commit()
+
+                    self.db.execute("update ami_block_devices set active=0 where ami_id=%s", (i.id, ))
+                    self.dbconn.commit()
+                    for mount_point, block_device_type in i.block_device_mapping.iteritems():
+                        sql = "insert into ami_block_devices set ami_id=%s, device_name=%s, ephemeral_name=%s, snapshot_id=%s, " \
+                              "delete_on_termination=%s, size=%s, volume_type=%s, iops=%s, encrypted=%s, active=1 on duplicate key update " \
+                              "ephemeral_name=%s, snapshot_id=%s, delete_on_termination=%s, size=%s, volume_type=%s, iops=%s, encrypted=%s, active=1"
+                        insertvars = [
+                            i.id, mount_point, block_device_type.ephemeral_name, block_device_type.snapshot_id, block_device_type.delete_on_termination,
+                            block_device_type.size, block_device_type.volume_type, block_device_type.iops, block_device_type.encrypted,
+                            block_device_type.ephemeral_name, block_device_type.snapshot_id, block_device_type.delete_on_termination,
+                            block_device_type.size, block_device_type.volume_type, block_device_type.iops, block_device_type.encrypted
+                        ]
+                        self.db.execute(sql, insertvars)
+                        self.dbconn.commit()
+
+                    self.db.execute("delete from ami_block_devices where active=0")
+                    self.dbconn.commit()
+                    self.db.execute("select ami_id from amis where active=0")
+                    ids = self.db.fetchall()
+                    if ids:
+                        for ami_id in ids:
+                            self.db.execute("delete from ami_block_devices where ami_id=%s", (ami_id, ))
+                            self.dbconn.commit()
+                        self.db.execute('delete from amis where ami_id=%s', (ami_id, ))
+                        self.dbconn.commit()
+                pprint(images)
+            except boto.exception.EC2ResponseError as e:
+                if e.code != 'AuthFailure':
+                    raise
+
 
             self.db.execute("update key_pairs set active=0 where region=%s",(region.name, ))
             self.dbconn.commit()
@@ -280,6 +339,7 @@ class InstanceManager(BaseManager):
         heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in").completer = ac.availability_zone
         heditparser.set_defaults(func=self.command_host_edit)
 
+        # ams host discovery
         discparser = hsubparser.add_parser("discovery", help="Run discovery on hosts/instances to populate database with resources")
         discparser.add_argument("--get-unames", action='store_true', help="Connects to each server to query the system's uname, much slower discovery due to ssh to each host (not implemented yet)")
         discparser.set_defaults(func=self.command_discover)
@@ -324,12 +384,37 @@ class InstanceManager(BaseManager):
         htagdelete.add_argument('-m', '--allow-multiple', help="Allow updating tags on multiple identifed instances (otherwise add/edit/delete operations will fail if there is multiple instances)", action='store_true')
         htagdelete.set_defaults(func=self.command_tag)
 
-        # ams key list
+        # ams host keys list
         hkeyparser = hsubparser.add_parser('keys', help="Management of Key Pairs")
         hkeyparser.add_argument('command', help="Command to run", choices=['list'])
         hkeyparser.add_argument('-r', '--region', help="AWS region name").completer = ac.region
         hkeyparser.set_defaults(func=self.command_key)
 
+        # ams host ami
+        hamiparser = hsubparser.add_parser("ami", help="Management of AMIs")
+        hamisubparser = hamiparser.add_subparsers(title="command", dest='command')
+        hamilistparser = hamisubparser.add_parser("list", help="List available AMIs")
+        hamilistparser.add_argument('-r', '--region', help="Filter by region").completer = ac.region
+        hamilistparser.set_defaults(func=self.command_amilist)
+
+
+    def command_amilist(self, args):
+        wheres = []
+        wherevars = []
+        if args.region:
+            wheres.append("region=%s")
+            wherevars.append(args.region)
+        where = ''
+        if wheres:
+            where = 'where ' + " and ".join(wheres)
+
+        sql = "select ami_id, region, name, architecture, virtualization_type, sriov_net_support, description from amis {0} order by region, ami_id".format(where)
+        self.db.execute(sql, wherevars)
+        rows = self.db.fetchall()
+        if not rows:
+            rows = []
+        headers = ['AMI ID', 'Region', 'Name', 'Arch', 'Virt Type', 'Enh. Ntwrk', 'description']
+        self.output_formatted("AMIs", headers, rows)
 
     def command_key(self, args):
         if args.command == 'list':

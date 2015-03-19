@@ -1,6 +1,10 @@
 aws-management-suite Change Log
 ===============================
 
+### March 18, 2015
+* Added collection of AMI information to host discovery
+ * Added `ams host ami list` command to list available AMIs
+
 ### March 3, 2015
 * Added collection of Security Group information to network discovery
  * Added `ams network security_groups list` command to list available security groups
