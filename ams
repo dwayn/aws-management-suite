@@ -12,6 +12,7 @@ from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
 from amslib.network.route53 import Route53Manager
 from amslib.network.general import NetworkManager
+from amslib.network.vpc import VpcManager
 from amslib.core.config import Config
 import pprint
 
@@ -23,6 +24,7 @@ settings.register_module(SnapshotManager(settings))
 settings.register_module(InstanceManager(settings))
 settings.register_module(Route53Manager(settings))
 settings.register_module(NetworkManager(settings))
+settings.register_module(VpcManager(settings))
 
 amsroot = os.path.realpath(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename))
 

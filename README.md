@@ -1102,6 +1102,30 @@ Arguments:
 
 ----
 
+### VPC
+#### `ams vpc discovery`
+Gathers information on VPCs and subnets. With no arguments discovery will run across all regions.
+
+Arguments:
+
+      -r REGION, --region REGION
+                            Limit discover to given region
+
+----
+
+#### `ams vpc list [TYPE=vpcs]`
+List information for vpcs or subnets.
+
+Arguments:
+
+      -v VPC_ID, --vpc-id VPC_ID
+                            Filter by VPC ID
+      -s SUBNET_ID, --subnet-id SUBNET_ID
+                            Filter by Subnet ID
+      -r REGION, --region REGION
+                            Filter by region
+
+
 ### Route53
 #### `ams route53 discovery`
 Reads the Route53 dns configurations and maps the hostnames defined in dns to the hosts in the hosts table. Currently this will pull all the records from dns down

@@ -126,9 +126,11 @@ class NetworkManager(BaseManager):
         discparser.add_argument('-r', '--region', help="Limit discover to given region").completer = ac.region
         discparser.set_defaults(func=self.command_discover)
 
+        # ams network security_groups
         sgparser = rsubparser.add_parser("security_groups", help="Security Group operations")
         sgsubparsers = sgparser.add_subparsers(title='subaction', dest='subaction')
 
+        # ams network security_groups list
         sglistparser = sgsubparsers.add_parser("list", help="List security groups")
         sglistparser.add_argument('-r', '--region', help="Filter security groups by region").completer = ac.region
         sglistparser.add_argument('-s', '--security-group', help="Filter by security group id").completer = ac.security_group_id
@@ -136,12 +138,15 @@ class NetworkManager(BaseManager):
         sglistparser.add_argument('-v', '--vpc', help="Filter by VPC id").completer = ac.security_group_vpc
         sglistparser.set_defaults(func=self.command_sg_list)
 
+        # ams network elastic_ips
         eipparser = rsubparser.add_parser("elastic_ips", help="Elastic IP operations")
         eipsubparsers = eipparser.add_subparsers(title='subaction', dest='subaction')
 
+        # ams network elastic_ips list
         eiplistparser = eipsubparsers.add_parser("list", help="List elastic IPs")
         eiplistparser.add_argument('-r', '--region', help="Filter elastic IPs by region").completer = ac.region
         eiplistparser.set_defaults(func=self.command_eip_list)
+
 
     def command_eip_list(self, args):
         where = ''
@@ -163,8 +168,8 @@ class NetworkManager(BaseManager):
         wheres = []
         wherevals = []
         if args.security_group:
-            wheres.append('name = %s')
-            wherevals.append(args.name)
+            wheres.append('security_group_id = %s')
+            wherevals.append(args.security_group)
         else:
             if args.name:
                 wheres.append('name = %s')

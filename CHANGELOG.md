@@ -1,6 +1,11 @@
 aws-management-suite Change Log
 ===============================
 
+### April 8, 2015
+* Added collection of VPC and VPC subnet information in `ams vpc discovery`
+* Added `ams vpc list` command to list information about VPCs and subnets
+* Added functionality to a number of autocomplete functions to make completions use contextual information from other command line arguments that have already been provided to filter the completion set
+
 ### March 18, 2015
 * Added collection of AMI information to host discovery
  * Added `ams host ami list` command to list available AMIs

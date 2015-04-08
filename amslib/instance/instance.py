@@ -24,14 +24,23 @@ class InstanceManager(BaseManager):
             't2.micro','t2.small','t2.medium','m3.medium','m3.large','m3.xlarge','m3.2xlarge',
             'c4.large','c4.xlarge','c4.2xlarge','c4.4xlarge','c4.8xlarge','c3.large','c3.xlarge','c3.2xlarge','c3.4xlarge','c3.8xlarge',
             'r3.large','r3.xlarge','r3.2xlarge','r3.4xlarge','r3.8xlarge',
-            'i2.xlarge','i2.2xlarge','i2.4xlarge','i2.8xlarge','hs1.8xlarge',
+            'i2.xlarge','i2.2xlarge','i2.4xlarge','i2.8xlarge', 'd2.xlarge', 'd2.2xlarge', 'd2.4xlarge', 'd2.8xlarge',
             'g2.2xlarge'
             # previous gen
             't1.micro','m1.small','m1.medium','m1.large','m1.xlarge',
             'c1.medium','c1.xlarge','cc2.8xlarge',
             'm2.xlarge','m2.2xlarge','m2.4xlarge',
-            'cr1.8xlarge','hi1.4xlarge',
+            'cr1.8xlarge','hi1.4xlarge','hs1.8xlarge',
             'cg1.4xlarge'
+        ]
+        # PV vs HVM comapatibility can be found here: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/virtualization_types.html
+        self.paravirtual = [
+            't1', 'c1', 'cc2', 'm1', 'm2', 'hi1', 'hs1', 'cg1',
+            'm3', 'c3', 'c4', 'd2'
+        ]
+        self.hvm = [
+            'cc2', 'hi1', 'hs1', 'cg1',
+            't2', 'm3', 'c3', 'c4', 'r3', 'i2', 'd2', 'g2'
         ]
 
     def discover(self, get_unames = False):
@@ -338,6 +347,13 @@ class InstanceManager(BaseManager):
         heditparser.add_argument('--configure-hostname', action='store_true', help="Set the hostname on the host to the FQDN that is currently the hostname or the uname that is currently defined for the instance in AMS (uname will override FQDN)")
         heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in").completer = ac.availability_zone
         heditparser.set_defaults(func=self.command_host_edit)
+
+        # coming soon!
+        # # ams host create
+        # hcreateparser = hsubparser.add_parser("create", help="Create a new instance")
+        # hcreateparser.add_argument('-m', '--ami-id', required=True, help="AMI ID for the new instance").completer = ac.ami_id
+        # heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in").completer = ac.availability_zone
+
 
         # ams host discovery
         discparser = hsubparser.add_parser("discovery", help="Run discovery on hosts/instances to populate database with resources")
