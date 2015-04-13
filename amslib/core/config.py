@@ -125,15 +125,17 @@ class Config:
 
 
     def load_legacy(self):
-        import settings
-        for k in dir(settings):
-            if k.startswith('__') or k == 'os' or k == 'env':
-                continue
-            name = k
-            if name == 'human_output':
-                name = name.upper()
-            self._legacyConfigs[name] = getattr(settings, k)
-
+        try:
+            import settings
+            for k in dir(settings):
+                if k.startswith('__') or k == 'os' or k == 'env':
+                    continue
+                name = k
+                if name == 'human_output':
+                    name = name.upper()
+                self._legacyConfigs[name] = getattr(settings, k)
+        except ImportError:
+            pass
 
 
     def load_ini(self):
@@ -214,38 +216,54 @@ class Config:
         finalsettings = {}
         for k,v in self._dbconfigs.iteritems():
             finalsettings[k] = v
+            self._sources[k] = 'Database'
 
         if os.path.basename(self._inifile) == 'defaults.ini':
             for k,v in self._iniconfigs.iteritems():
                 if k in finalsettings:
-                    finalsettings[k] = v or finalsettings[k]
+                    if v is not None:
+                        finalsettings[k] = v
+                        self._sources[k] = 'defaults.ini'
                 else:
                     finalsettings[k] = v
+                    self._sources[k] = 'defaults.ini'
 
         for k,v in self._legacyConfigs.iteritems():
             if k in finalsettings:
-                finalsettings[k] = v or finalsettings[k]
+                if v is not None:
+                    finalsettings[k] = v
+                    self._sources[k] = 'settings.py'
             else:
                 finalsettings[k] = v
+                self._sources[k] = 'settings.py'
 
         if os.path.basename(self._inifile) != 'defaults.ini':
             for k,v in self._iniconfigs.iteritems():
                 if k in finalsettings:
-                    finalsettings[k] = v or finalsettings[k]
+                    if v is not None:
+                        finalsettings[k] = v
+                    self._sources[k] = self._inifile
                 else:
                     finalsettings[k] = v
+                    self._sources[k] = self._inifile
 
         for k,v in self._env_overrides.iteritems():
             if k in finalsettings:
-                finalsettings[k] = v or finalsettings[k]
+                if v is not None:
+                    finalsettings[k] = v
+                    self._sources[k] = 'Environment Override'
             else:
                 finalsettings[k] = v
+                self._sources[k] = 'Environment Override'
 
         for k,v in self.override_values.iteritems():
             if k in finalsettings:
-                finalsettings[k] = v or finalsettings[k]
+                if v is not None:
+                    finalsettings[k] = v
+                    self._sources[k] = 'Application Override'
             else:
                 finalsettings[k] = v
+                self._sources[k] = 'Application Override'
 
         for k,v in finalsettings.iteritems():
             setattr(self, k, v)

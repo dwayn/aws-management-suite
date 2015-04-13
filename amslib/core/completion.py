@@ -132,7 +132,7 @@ class ArgumentCompletion(BaseManager):
             row = self.db.fetchone()
             if row:
                 if row[0] == 'bool':
-                    return [0, 1]
+                    return ['0', '1']
                 else:
                     return [row[1]]
         return None
