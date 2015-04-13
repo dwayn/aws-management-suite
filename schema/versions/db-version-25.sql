@@ -1,0 +1,1 @@
+INSERT INTO `config` set `var`='DEFAULT_KEYPAIR', `value`=NULL, `type`='string', `description`='Default keypair to use when launching instances when a keypair is not provided', `configurable`=1;

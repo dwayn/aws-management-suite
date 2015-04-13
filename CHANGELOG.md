@@ -1,6 +1,11 @@
 aws-management-suite Change Log
 ===============================
 
+### April 13, 2015
+* Added cli commands to manage the application configuration that is stored in the database
+ * `ams internals config list`
+ * `ams internals config update`
+
 ### April 8, 2015
 * Added collection of VPC and VPC subnet information in `ams vpc discovery`
 * Added `ams vpc list` command to list information about VPCs and subnets

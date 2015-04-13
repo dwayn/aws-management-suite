@@ -1305,6 +1305,29 @@ This should be run every time that the software is updated to ensure that databa
 
 ----
 
+#### `ams internals config list`
+With no arguments, this will display the current value in the database for all of the config variables. Passing --active displays 
+the same config variables, but the values for all of the variables are pulled from the active running configuration (after all config 
+sources are processed).
+
+Arguments:
+
+      -a, --active  Show the full active config rather than the values that are in
+                    the database
+
+----
+
+#### `ams internals config update (name) [value]`
+Update the value of the `name` variable to `value`. `value` is required unless using the --clear option to clear the value.
+
+Required Arguments: name, value|--clear
+
+Arguments:
+
+      --clear     Clear the value in the database for the config variable
+
+----
+
 <a name="cms_integration"></a>
 
 

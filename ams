@@ -7,6 +7,7 @@ import inspect
 import os
 import logging
 from amslib.core.version import DATABASE_VERSION
+from amslib.core.completion import ArgumentCompletion
 from amslib.ebs.volume import VolumeManager
 from amslib.ebs.snapshot import SnapshotManager
 from amslib.instance.instance import InstanceManager
@@ -59,6 +60,7 @@ def upgrade_db(args):
     dbconn.commit()
 
 def main():
+    ac = ArgumentCompletion(settings)
     logger = logging.getLogger('ams')
     parser = argparse.ArgumentParser(prog="ams")
     parser.add_argument("-q", "--scriptable-output", action='store_true', help="removes human readability formatting for scripting purposes")
@@ -83,6 +85,21 @@ def main():
         p = dbsubparser.add_parser("upgrade", help="Upgrade the database to the current version for AMS")
         p.set_defaults(func=upgrade_db)
 
+    if settings.DATABASE_VERSION == DATABASE_VERSION:
+        cparser = isubparser.add_parser("config", help="Manage database configuration")
+        csubparsers = cparser.add_subparsers(title="action", dest="action")
+
+        # ams internals config list
+        clistparser = csubparsers.add_parser("list", help="List current configuration variables")
+        clistparser.add_argument('-a', '--active', action='store_true', help="Show the full active config rather than the values that are in the database")
+        clistparser.set_defaults(func=command_config_list)
+
+        # ams internals config update
+        cupdateparser = csubparsers.add_parser("update", help="Modify current configuration variables in the database")
+        cupdateparser.add_argument('name', help="Config variable name to change setting for").completer = ac.config_name
+        cupdateparser.add_argument('value', nargs='?', help="New value for the config variable").completer = ac.config_value
+        cupdateparser.add_argument('--clear', action='store_true', help="Clear the value in the database for the config variable")
+        cupdateparser.set_defaults(func=command_config_update)
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
@@ -96,6 +113,80 @@ def main():
         logger.critical(e.__class__.__name__ + ": " + str(e))
         if getattr(settings, 'THROW_ERRORS', False):
             raise
+
+def command_config_update(args):
+    dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
+                         port=settings.TRACKING_DB['port'],
+                         user=settings.TRACKING_DB['user'],
+                         passwd=settings.TRACKING_DB['pass'],
+                         db=settings.TRACKING_DB['dbname'])
+    db = dbconn.cursor()
+
+    db.execute("select `value`, `type`, `configurable` from config where `var`=%s", (args.name, ))
+    row = db.fetchone()
+    if row:
+        val, tp, configurable = row
+        if args.clear:
+            db.execute("update config set `value`=NULL where `var`=%s", (args.name, ))
+            dbconn.commit()
+        else:
+            if not args.value:
+                print("Value required for update")
+                return
+            check_func = None
+            if tp == 'int':
+                check_func = int
+            elif tp == bool:
+                check_func = int
+            try:
+                new_value = args.value
+                if check_func:
+                    new_value =  check_func(new_value)
+
+                db.execute("update config set `value` = %s where `var` = %s", (new_value, args.name))
+                dbconn.commit()
+
+            except ValueError:
+                print("{0} does not match type '{1}' for {2}".format(args.value, tp, args.name))
+                return
+
+        setattr(args, 'active', False)
+        command_config_list(args)
+    else:
+        print("Config variable '{0}' not found".format(args.name))
+
+
+
+def command_config_list(args):
+    dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
+                         port=settings.TRACKING_DB['port'],
+                         user=settings.TRACKING_DB['user'],
+                         passwd=settings.TRACKING_DB['pass'],
+                         db=settings.TRACKING_DB['dbname'])
+    db = dbconn.cursor()
+    db.execute("select `var`,`value`,`type`,`env_overrides`,`description`, if(`configurable`,'yes','no') from config")
+    rows = db.fetchall()
+    if not rows:
+        rows = []
+
+    headers = ['Variable', 'Value', 'Type', 'Environment Overrides', 'Description', 'Configurable']
+    results = []
+    for row in rows:
+        if args.active:
+            title = "Active Configuration"
+            parts = row[0].split('.')
+            if len(parts) == 1:
+                val = getattr(settings, row[0], None)
+            elif len(parts) == 2:
+                block = getattr(settings, parts[0], None)
+                val = block[parts[1]]
+
+            results.append([row[0], val, row[2], row[3], row[4], row[5]])
+        else:
+            title = 'Database Configuration'
+            results.append([row[0], row[1], row[2], row[3], row[4], row[5]])
+
+    settings.modules['volume'].output_formatted(title, headers, results)
 
 
 if __name__ == "__main__":

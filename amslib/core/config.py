@@ -93,7 +93,7 @@ class Config:
                     if vartype == 'string':
                         value = str(value)
                     elif vartype == 'bool':
-                        value = bool(value)
+                        value = bool(int(value))
                     elif vartype == 'path':
                         value = os.path.realpath(os.path.expanduser(value))
 
