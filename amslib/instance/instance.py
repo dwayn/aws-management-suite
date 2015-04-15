@@ -25,7 +25,7 @@ class InstanceManager(BaseManager):
             'c4.large','c4.xlarge','c4.2xlarge','c4.4xlarge','c4.8xlarge','c3.large','c3.xlarge','c3.2xlarge','c3.4xlarge','c3.8xlarge',
             'r3.large','r3.xlarge','r3.2xlarge','r3.4xlarge','r3.8xlarge',
             'i2.xlarge','i2.2xlarge','i2.4xlarge','i2.8xlarge', 'd2.xlarge', 'd2.2xlarge', 'd2.4xlarge', 'd2.8xlarge',
-            'g2.2xlarge'
+            'g2.2xlarge',
             # previous gen
             't1.micro','m1.small','m1.medium','m1.large','m1.xlarge',
             'c1.medium','c1.xlarge','cc2.8xlarge',
@@ -43,91 +43,134 @@ class InstanceManager(BaseManager):
             't2', 'm3', 'c3', 'c4', 'r3', 'i2', 'd2', 'g2'
         ]
 
-    def discover(self, get_unames = False):
-        regions = boto.ec2.regions()
-        instance_ids = []
-        self.db.execute("update availability_zones set active=0")
-        self.dbconn.commit()
-        for region in regions:
-            self.logger.info("Processing region {0}".format(region.name))
-            botoconn = self.__get_boto_conn(region.name)
-            try:
-                zones = botoconn.get_all_zones()
-                for zone in zones:
-                    self.db.execute("insert into availability_zones set availability_zone=%s, region=%s, active=1 on duplicate key update active=1", (zone.name, region.name))
-                    self.dbconn.commit()
-            except:
-                pass
+    def load_amis(self, region):
+        botoconn = self.__get_boto_conn(region)
+        try:
 
-            try:
+            images = botoconn.get_all_images(owners=['self'])
+            self.db.execute('update amis set active=0 where region=%s', (region, ))
+            self.dbconn.commit()
+            for i in images:
+                #TODO this is getting ridiculous...I think it is time to write a nice insert/update helper that takes a table name and dict of column values to make these much cleaner
+                sql = "insert into amis set ami_id=%s, region=%s, name=%s, description=%s, location=%s, state=%s, owner_id=%s, " \
+                      "owner_alias=%s, is_public=%s, architecture=%s, platform=%s, type=%s, kernel_id=%s, ramdisk_id=%s, " \
+                      "product_codes=%s, billing_products=%s, root_device_type=%s, root_device_name=%s, virtualization_type=%s, " \
+                      "hypervisor=%s, sriov_net_support=%s, active=1 on duplicate key update " \
+                      "region=%s, name=%s, description=%s, location=%s, state=%s, owner_id=%s, " \
+                      "owner_alias=%s, is_public=%s, architecture=%s, platform=%s, type=%s, kernel_id=%s, ramdisk_id=%s, " \
+                      "product_codes=%s, billing_products=%s, root_device_type=%s, root_device_name=%s, virtualization_type=%s, " \
+                      "hypervisor=%s, sriov_net_support=%s, active=1"
 
-                images = botoconn.get_all_images(owners=['self'])
-                self.db.execute('update amis set active=0 where region=%s', (region.name, ))
+                insertvars = [
+                    i.id, region, i.name, i.description, i.location, i.state, i.owner_id, i.owner_alias, i.is_public,
+                    i.architecture, i.platform, i.type, i.kernel_id, i.ramdisk_id, json.dumps(i.product_codes), json.dumps(i.billing_products),
+                    i.root_device_type, i.root_device_name, i.virtualization_type, i.hypervisor, i.sriov_net_support,
+                    region, i.name, i.description, i.location, i.state, i.owner_id, i.owner_alias, i.is_public,
+                    i.architecture, i.platform, i.type, i.kernel_id, i.ramdisk_id, json.dumps(i.product_codes), json.dumps(i.billing_products),
+                    i.root_device_type, i.root_device_name, i.virtualization_type, i.hypervisor, i.sriov_net_support
+                ]
+                self.db.execute(sql, insertvars)
                 self.dbconn.commit()
-                for i in images:
-                    #TODO this is getting ridiculous...I think it is time to write a nice insert/update helper that takes a table name and dict of column values to make these much cleaner
-                    sql = "insert into amis set ami_id=%s, region=%s, name=%s, description=%s, location=%s, state=%s, owner_id=%s, " \
-                          "owner_alias=%s, is_public=%s, architecture=%s, platform=%s, type=%s, kernel_id=%s, ramdisk_id=%s, " \
-                          "product_codes=%s, billing_products=%s, root_device_type=%s, root_device_name=%s, virtualization_type=%s, " \
-                          "hypervisor=%s, sriov_net_support=%s, active=1 on duplicate key update " \
-                          "region=%s, name=%s, description=%s, location=%s, state=%s, owner_id=%s, " \
-                          "owner_alias=%s, is_public=%s, architecture=%s, platform=%s, type=%s, kernel_id=%s, ramdisk_id=%s, " \
-                          "product_codes=%s, billing_products=%s, root_device_type=%s, root_device_name=%s, virtualization_type=%s, " \
-                          "hypervisor=%s, sriov_net_support=%s, active=1"
 
+                self.db.execute("update ami_block_devices set active=0 where ami_id=%s", (i.id, ))
+                self.dbconn.commit()
+                for mount_point, block_device_type in i.block_device_mapping.iteritems():
+                    sql = "insert into ami_block_devices set ami_id=%s, device_name=%s, ephemeral_name=%s, snapshot_id=%s, " \
+                          "delete_on_termination=%s, size=%s, volume_type=%s, iops=%s, encrypted=%s, active=1 on duplicate key update " \
+                          "ephemeral_name=%s, snapshot_id=%s, delete_on_termination=%s, size=%s, volume_type=%s, iops=%s, encrypted=%s, active=1"
                     insertvars = [
-                        i.id, region.name, i.name, i.description, i.location, i.state, i.owner_id, i.owner_alias, i.is_public,
-                        i.architecture, i.platform, i.type, i.kernel_id, i.ramdisk_id, json.dumps(i.product_codes), json.dumps(i.billing_products),
-                        i.root_device_type, i.root_device_name, i.virtualization_type, i.hypervisor, i.sriov_net_support,
-                        region.name, i.name, i.description, i.location, i.state, i.owner_id, i.owner_alias, i.is_public,
-                        i.architecture, i.platform, i.type, i.kernel_id, i.ramdisk_id, json.dumps(i.product_codes), json.dumps(i.billing_products),
-                        i.root_device_type, i.root_device_name, i.virtualization_type, i.hypervisor, i.sriov_net_support
+                        i.id, mount_point, block_device_type.ephemeral_name, block_device_type.snapshot_id, block_device_type.delete_on_termination,
+                        block_device_type.size, block_device_type.volume_type, block_device_type.iops, block_device_type.encrypted,
+                        block_device_type.ephemeral_name, block_device_type.snapshot_id, block_device_type.delete_on_termination,
+                        block_device_type.size, block_device_type.volume_type, block_device_type.iops, block_device_type.encrypted
                     ]
                     self.db.execute(sql, insertvars)
                     self.dbconn.commit()
 
-                    self.db.execute("update ami_block_devices set active=0 where ami_id=%s", (i.id, ))
-                    self.dbconn.commit()
-                    for mount_point, block_device_type in i.block_device_mapping.iteritems():
-                        sql = "insert into ami_block_devices set ami_id=%s, device_name=%s, ephemeral_name=%s, snapshot_id=%s, " \
-                              "delete_on_termination=%s, size=%s, volume_type=%s, iops=%s, encrypted=%s, active=1 on duplicate key update " \
-                              "ephemeral_name=%s, snapshot_id=%s, delete_on_termination=%s, size=%s, volume_type=%s, iops=%s, encrypted=%s, active=1"
-                        insertvars = [
-                            i.id, mount_point, block_device_type.ephemeral_name, block_device_type.snapshot_id, block_device_type.delete_on_termination,
-                            block_device_type.size, block_device_type.volume_type, block_device_type.iops, block_device_type.encrypted,
-                            block_device_type.ephemeral_name, block_device_type.snapshot_id, block_device_type.delete_on_termination,
-                            block_device_type.size, block_device_type.volume_type, block_device_type.iops, block_device_type.encrypted
-                        ]
-                        self.db.execute(sql, insertvars)
+                self.db.execute("delete from ami_block_devices where active=0")
+                self.dbconn.commit()
+                self.db.execute("select ami_id from amis where active=0")
+                ids = self.db.fetchall()
+                if ids:
+                    for ami_id in ids:
+                        self.db.execute("delete from ami_block_devices where ami_id=%s", (ami_id, ))
                         self.dbconn.commit()
-
-                    self.db.execute("delete from ami_block_devices where active=0")
+                    self.db.execute('delete from amis where ami_id=%s', (ami_id, ))
                     self.dbconn.commit()
-                    self.db.execute("select ami_id from amis where active=0")
-                    ids = self.db.fetchall()
-                    if ids:
-                        for ami_id in ids:
-                            self.db.execute("delete from ami_block_devices where ami_id=%s", (ami_id, ))
-                            self.dbconn.commit()
-                        self.db.execute('delete from amis where ami_id=%s', (ami_id, ))
-                        self.dbconn.commit()
-                pprint(images)
-            except boto.exception.EC2ResponseError as e:
-                if e.code != 'AuthFailure':
-                    raise
+        except boto.exception.EC2ResponseError as e:
+            if e.code != 'AuthFailure':
+                raise
 
 
-            self.db.execute("update key_pairs set active=0 where region=%s",(region.name, ))
-            self.dbconn.commit()
-            try:
-                keypairs = botoconn.get_all_key_pairs()
-                for kp in keypairs:
-                    self.db.execute("insert into key_pairs set region=%s, key_name=%s, fingerprint=%s, active=1 on duplicate key update fingerprint=%s, active=1", (region.name, kp.name, kp.fingerprint, kp.fingerprint))
-                    self.dbconn.commit()
-            except:
-                pass
-            self.db.execute("delete from key_pairs where region=%s and active=0", (region.name, ))
-            self.dbconn.commit()
+    def load_zones(self, region):
+        botoconn = self.__get_boto_conn(region)
+        self.db.execute("update availability_zones set active=0 where region=%s", (region, ))
+        self.dbconn.commit()
+        try:
+            zones = botoconn.get_all_zones()
+            for zone in zones:
+                self.db.execute("insert into availability_zones set availability_zone=%s, region=%s, active=1 on duplicate key update active=1", (zone.name, region))
+                self.dbconn.commit()
+        except:
+            pass
+
+
+    def load_keypairs(self, region):
+        botoconn = self.__get_boto_conn(region)
+        self.db.execute("update key_pairs set active=0 where region=%s",(region, ))
+        self.dbconn.commit()
+        try:
+            keypairs = botoconn.get_all_key_pairs()
+            for kp in keypairs:
+                self.db.execute("insert into key_pairs set region=%s, key_name=%s, fingerprint=%s, active=1 on duplicate key update fingerprint=%s, active=1", (region, kp.name, kp.fingerprint, kp.fingerprint))
+                self.dbconn.commit()
+        except:
+            pass
+        self.db.execute("delete from key_pairs where region=%s and active=0", (region, ))
+        self.dbconn.commit()
+
+
+    def store_instance(self, instance, get_uname=False):
+        name = None
+        if 'Name' in instance.tags:
+            name = instance.tags['Name']
+        hint = None
+        hext = None
+        hn = None
+        if instance.private_dns_name:
+            hint = instance.private_dns_name
+        if instance.public_dns_name:
+            hext = instance.public_dns_name
+        if instance.dns_name:
+            hn = instance.dns_name
+
+        uname = None
+        if get_uname:
+            # TODO implement the ssh call to the host to gather the uname
+            pass
+
+        self.db.execute("insert into hosts set instance_id=%s, host=%s, hostname_internal=%s, hostname_external=%s, "
+                        "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s, uname=%s, vpc_id=%s, "
+                        "subnet_id=%s, key_name=%s, `terminated`=0 on duplicate key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
+                        "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s), vpc_id=%s, subnet_id=%s, key_name=%s, `terminated`=0", (instance.id, hn, hint, hext,
+                                                                    instance.private_ip_address, instance.ip_address, instance.image_id, instance.instance_type,
+                                                                    instance.placement, name, uname, instance.vpc_id, instance.subnet_id, instance.key_name, hint, hext, instance.private_ip_address,
+                                                                    instance.ip_address, instance.image_id, instance.instance_type, instance.placement, name, hn, instance.vpc_id, instance.subnet_id, instance.key_name))
+        self.dbconn.commit()
+        self.store_ec2_tags(instance)
+
+
+
+    def discover(self, get_unames = False):
+        regions = boto.ec2.regions()
+        for region in regions:
+            instance_ids = []
+            self.logger.info("Processing region {0}".format(region.name))
+            botoconn = self.__get_boto_conn(region.name)
+
+            self.load_zones(region.name)
+            self.load_amis(region.name)
+            self.load_keypairs(region.name)
 
             self.logger.info("Getting instances")
             try:
@@ -137,38 +180,12 @@ class InstanceManager(BaseManager):
             for i in instances:
                 instance_ids.append(i.id)
                 self.logger.info("Found instance {0}".format(i.id))
-                name = None
-                if 'Name' in i.tags:
-                    name = i.tags['Name']
-                hint = None
-                hext = None
-                hn = None
-                if i.private_dns_name:
-                    hint = i.private_dns_name
-                if i.public_dns_name:
-                    hext = i.public_dns_name
-                if i.dns_name:
-                    hn = i.dns_name
+                self.store_instance(i, get_unames)
 
-                uname = None
-                if get_unames:
-                    # TODO implement the ssh call to the host to gather the uname
-                    pass
-
-                self.db.execute("insert into hosts set instance_id=%s, host=%s, hostname_internal=%s, hostname_external=%s, "
-                                "ip_internal=%s, ip_external=%s, ami_id=%s, instance_type=%s, availability_zone=%s, name=%s, uname=%s, vpc_id=%s, "
-                                "subnet_id=%s, key_name=%s on duplicate key update hostname_internal=%s, hostname_external=%s, ip_internal=%s, ip_external=%s, ami_id=%s, "
-                                "instance_type=%s, availability_zone=%s, name=%s, host=COALESCE(host, %s), vpc_id=%s, subnet_id=%s, key_name=%s", (i.id, hn, hint, hext,
-                                                                            i.private_ip_address, i.ip_address, i.image_id, i.instance_type,
-                                                                            i.placement, name, uname, i.vpc_id, i.subnet_id, i.key_name, hint, hext, i.private_ip_address,
-                                                                            i.ip_address, i.image_id, i.instance_type, i.placement, name, hn, i.vpc_id, i.subnet_id, i.key_name))
-                self.dbconn.commit()
-                self.store_ec2_tags(i)
-
-        self.db.execute("update hosts set `terminated`=0 where instance_id in ('{0}')".format("','".join(instance_ids)))
-        self.dbconn.commit()
-        self.db.execute("update hosts set `terminated`=1 where instance_id not in ('{0}')".format("','".join(instance_ids)))
-        self.dbconn.commit()
+            self.db.execute("update hosts set `terminated`=0 where instance_id in ('{0}')".format("','".join(instance_ids)))
+            self.dbconn.commit()
+            self.db.execute("update hosts set `terminated`=1 where instance_id not in ('{0}') and availability_zone like %s".format("','".join(instance_ids)), (region.name + '%', ))
+            self.dbconn.commit()
 
     def store_ec2_tags(self, boto_instance):
         self.db.execute("update tags set removed=1 where resource_id=%s and `type`='standard' ", (boto_instance.id, ))
@@ -297,6 +314,45 @@ class InstanceManager(BaseManager):
             self.logger.info("Hostname configured permanently on instance")
 
 
+    def create_instance(self, region, ami_id, instance_type, number=1, keypair=None, zone=None, monitoring=False, vpc_id=None, subnet_id=None, private_ip=None, security_groups=[], ebs_optimized=False, tags={}):
+        if not keypair:
+            if self.settings.DEFAULT_KEYPAIR:
+                keypair = self.settings.DEFAULT_KEYPAIR
+        reservation = None
+        botoconn = self.__get_boto_conn(region)
+        if vpc_id or subnet_id:
+            if not subnet_id:
+                self.logger.error("subnet must be provided for a vpc instance")
+                return
+            reservation = botoconn.run_instances(image_id=ami_id, instance_type=instance_type, min_count=number, monitoring_enabled=monitoring, max_count=number, key_name=keypair, ebs_optimized=ebs_optimized, security_group_ids=security_groups, subnet_id=subnet_id, private_ip_address=private_ip)
+        else:
+            reservation = botoconn.run_instances(image_id=ami_id, instance_type=instance_type, min_count=number, monitoring_enabled=monitoring, max_count=number, key_name=keypair, ebs_optimized=ebs_optimized, placement=zone, security_groups=security_groups)
+
+        if reservation:
+            # we need to give amazon a moment to get the instance into an existent state
+            time.sleep(3)
+            for instance in reservation.instances:
+                instance.update()
+                c = 0
+                while instance.state == 'pending':
+                    if (c % 10) == 0:
+                        self.logger.info("Waiting on instance {0} to become available".format(instance.id))
+                    time.sleep(1)
+                    instance.update()
+
+                self.logger.info("Created instance: {0}".format(instance.id))
+                self.store_instance(instance)
+                for sg in security_groups:
+                    # TODO this should be relocated to exist in amslib.network.general.NetorkManager in some form, once the different parts of discovery are untangled
+                    self.db.execute("insert into security_group_associations set security_group_id=%s, instance_id=%s", (sg, instance.id))
+                    self.dbconn.commit()
+                for tagname, tagvalue in tags.iteritems():
+                    self.add_tag(instance.id, tagname, tagvalue)
+                    if tagname == 'Name':
+                        self.db.execute("update hosts set name=%s where instance_id=%s", (tagvalue, instance.id))
+                        self.dbconn.commit()
+
+
     def argparse_stub(self):
         return 'host'
 
@@ -326,11 +382,11 @@ class InstanceManager(BaseManager):
         addeditargs = argparse.ArgumentParser(add_help=False)
         addeditargs.add_argument('-i', '--instance', help="Instance ID of the instance to add", required=True).completer = ac.instance_id
         addeditargs.add_argument('-u', '--uname', help="Hostname to use when setting uname on the host (default is to use instance hostname)")
-        addeditargs.add_argument('--hostname-internal', help="Internal hostname (stored but not currently used)")
-        addeditargs.add_argument('--hostname-external', help="External hostname (stored but not currently used)")
-        addeditargs.add_argument('--ip-internal', help="Internal IP address (stored but not currently used)")
-        addeditargs.add_argument('--ip-external', help="External IP address (stored but not currently used)")
-        addeditargs.add_argument('--ami-id', help="AMI ID (stored but not currently used)")
+        addeditargs.add_argument('--hostname-internal', help="Internal hostname")
+        addeditargs.add_argument('--hostname-external', help="External hostname")
+        addeditargs.add_argument('--ip-internal', help="Internal IP address")
+        addeditargs.add_argument('--ip-external', help="External IP address")
+        addeditargs.add_argument('--ami-id', help="AMI ID")
         addeditargs.add_argument('--instance-type', help="Instance type (stored but not currently used)", metavar='INSTANCE_TYPE', choices=self.instance_types)
         addeditargs.add_argument('--notes', help="Notes on the instance/host (stored but not currently used)")
         addeditargs.add_argument('--name', help="Name of the host (should match the 'Name' tag in EC2 for the instance)")
@@ -348,11 +404,23 @@ class InstanceManager(BaseManager):
         heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in").completer = ac.availability_zone
         heditparser.set_defaults(func=self.command_host_edit)
 
-        # coming soon!
-        # # ams host create
-        # hcreateparser = hsubparser.add_parser("create", help="Create a new instance")
-        # hcreateparser.add_argument('-m', '--ami-id', required=True, help="AMI ID for the new instance").completer = ac.ami_id
-        # heditparser.add_argument('-z', '--zone', help="Availability zone that the instance is in").completer = ac.availability_zone
+        # ams host create
+        hcreateparser = hsubparser.add_parser("create", help="Create a new instance")
+        hcreateparser.add_argument('-r', '--region', required=True, help="Region to create the instance in").completer = ac.region
+        hcreateparser.add_argument('-y', '--instance-type', required=True, help="EC2 instance type", metavar='INSTANCE_TYPE', choices=self.instance_types)
+        hcreateparser.add_argument('-m', '--ami-id', required=True, help="AMI ID for the new instance").completer = ac.ami_id
+        hcreateparser.add_argument('-k', '--keypair', help="Keypair name to use for creating instance").completer = ac.keypair
+        hcreateparser.add_argument('-z', '--zone', help="Availability zone to create the instance in").completer = ac.availability_zone
+        hcreateparser.add_argument('-o', '--monitoring', action='store_true', help="Enable detailed cloudwatch monitoring")
+        hcreateparser.add_argument('-v', '--vpc-id', help="VPC ID (Not required, used to aid autocomplete for subnet id)").completer = ac.vpc_id
+        hcreateparser.add_argument('-s', '--subnet-id', help="Subnet ID for VPC").completer = ac.subnet_id
+        hcreateparser.add_argument('-i', '--private-ip', help="Private IP address to assign to instance (VPC only)")
+        hcreateparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)").completer = ac.security_group_id
+        hcreateparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization")
+        hcreateparser.add_argument('-n', '--number', type=int, default=1, help="Number of instances to create")
+        hcreateparser.add_argument('-a', '--name', help="Set the name tag for created instance")
+        hcreateparser.add_argument('-t', '--tag', action='append', help="Add tag to the instance in the form tagname=tagvalue, eg: --tag my_tag=my_value (supports multiple usage)")
+        hcreateparser.set_defaults(func=self.command_host_create)
 
 
         # ams host discovery
@@ -412,6 +480,22 @@ class InstanceManager(BaseManager):
         hamilistparser = hamisubparser.add_parser("list", help="List available AMIs")
         hamilistparser.add_argument('-r', '--region', help="Filter by region").completer = ac.region
         hamilistparser.set_defaults(func=self.command_amilist)
+
+
+    def command_host_create(self, args):
+
+        tags = {}
+        if args.tag:
+            for tag in args.tag:
+                parts = tag.split('=')
+                if len(parts) != 2:
+                    self.logger.error("Tag {0} not in the form tagname=tagvalue".format(tag))
+                    return
+                tags[parts[0].strip()] = parts[1].strip()
+        if args.name:
+            tags['Name'] = args.name
+
+        self.create_instance(region=args.region, ami_id=args.ami_id, instance_type=args.instance_type, number=args.number, keypair=args.keypair, zone=args.zone, monitoring=args.monitoring, vpc_id=args.vpc_id, subnet_id=args.subnet_id, private_ip=args.private_ip, security_groups=args.security_group, ebs_optimized=args.ebs_optimized, tags=tags)
 
 
     def command_amilist(self, args):

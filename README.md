@@ -175,8 +175,49 @@ Arguments:
 
 ----
 
+#### `ams host create`
+Create new instance(s) with the givens settings. The cli completions for many of the options are contextual based on options that have been 
+provided up to the point that completion is being done. Providing region will help filter zone, ami-id, vpc-id and security-group; providing 
+zone will help filter subnet-id; providing vpc-id will help filter security-group and subnet-id. Example: `ams host create --region us-west-2 --zone <TAB><TAB>` 
+will give autocomplete options only for zones that are in region already given.     
+
+Required Arguments: --region, --ami-id, --instance-type
+    * VPC Required Arguments: --subnet-id
+    * EC2 Classic Required Arguments: --zone
+
+Arguments:
+
+      -r REGION, --region REGION
+                            Region to create the instance in
+      -y INSTANCE_TYPE, --instance-type INSTANCE_TYPE
+                            EC2 instance type
+      -m AMI_ID, --ami-id AMI_ID
+                            AMI ID for the new instance
+      -k KEYPAIR, --keypair KEYPAIR
+                            Keypair name to use for creating instance
+      -z ZONE, --zone ZONE  Availability zone to create the instance in
+      -o, --monitoring      Enable detailed cloudwatch monitoring
+      -v VPC_ID, --vpc-id VPC_ID
+                            VPC ID (Not required, used to aid autocomplete for
+                            subnet id)
+      -s SUBNET_ID, --subnet-id SUBNET_ID
+                            Subnet ID for VPC
+      -i PRIVATE_IP, --private-ip PRIVATE_IP
+                            Private IP address to assign to instance (VPC only)
+      -g SECURITY_GROUP, --security-group SECURITY_GROUP
+                            Security group to associate with instance (supports
+                            multiple usage)
+      -e, --ebs-optimized   Enable EBS optimization
+      -n NUMBER, --number NUMBER
+                            Number of instances to create
+      -a NAME, --name NAME  Set the name tag for created instance
+      -t TAG, --tag TAG     Add tag to the instance in the form tagname=tagvalue,
+                            eg: --tag my_tag=my_value (supports multiple usage)
+
+----
+
 #### `ams host add`
-Add a host to the hosts table so that resources on the host can be managed. This has effectively been replaced by the host discovery functionality.
+Add a host to the hosts table so that resources on the host can be managed. This has effectively been replaced by the host discovery and host create functionality.
 
 Required arguments: --instance, --host, --zone
 

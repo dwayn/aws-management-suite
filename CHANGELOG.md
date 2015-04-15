@@ -1,6 +1,10 @@
 aws-management-suite Change Log
 ===============================
 
+### April 15, 2015
+* Added support for creating instances using `ams host create`
+ * added more contextual support for completions so that completions get filtered better based on options already provided 
+
 ### April 13, 2015
 * Added cli commands to manage the application configuration that is stored in the database
  * `ams internals config list`
