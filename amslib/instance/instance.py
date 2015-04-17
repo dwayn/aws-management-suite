@@ -4,6 +4,7 @@ from amslib.core.manager import BaseManager
 from amslib.core.formatter import ArgParseSmartFormatter
 from amslib.ssh.sshmanager import SSHManager
 from amslib.core.completion import ArgumentCompletion
+from amslib.core.completion import HostTemplateArgumentCompletion
 from errors import *
 import time
 from pprint import pprint
@@ -314,12 +315,21 @@ class InstanceManager(BaseManager):
             self.logger.info("Hostname configured permanently on instance")
 
 
-    def create_instance(self, region, ami_id, instance_type, number=1, keypair=None, zone=None, monitoring=False, vpc_id=None, subnet_id=None, private_ip=None, security_groups=[], ebs_optimized=False, tags={}):
+    def create_instance(self, region, ami_id, instance_type, number=1, keypair=None, zone=None, monitoring=None, vpc_id=None, subnet_id=None, private_ip=None, security_groups=[], ebs_optimized=None, tags={}):
         if not keypair:
             if self.settings.DEFAULT_KEYPAIR:
                 keypair = self.settings.DEFAULT_KEYPAIR
         reservation = None
         botoconn = self.__get_boto_conn(region)
+
+
+
+        # apply proper defaults for things that need them
+        if monitoring is None:
+            monitoring = False
+        if ebs_optimized is None:
+            ebs_optimized = False
+
         if vpc_id or subnet_id:
             if not subnet_id:
                 self.logger.error("subnet must be provided for a vpc instance")
@@ -363,6 +373,7 @@ class InstanceManager(BaseManager):
 
     def argument_parser_builder(self, parser):
         ac = ArgumentCompletion(self.settings)
+        htac = HostTemplateArgumentCompletion(self.settings)
 
         hsubparser = parser.add_subparsers(title="action", dest='action')
 
@@ -406,20 +417,23 @@ class InstanceManager(BaseManager):
 
         # ams host create
         hcreateparser = hsubparser.add_parser("create", help="Create a new instance")
-        hcreateparser.add_argument('-r', '--region', required=True, help="Region to create the instance in").completer = ac.region
-        hcreateparser.add_argument('-y', '--instance-type', required=True, help="EC2 instance type", metavar='INSTANCE_TYPE', choices=self.instance_types)
-        hcreateparser.add_argument('-m', '--ami-id', required=True, help="AMI ID for the new instance").completer = ac.ami_id
-        hcreateparser.add_argument('-k', '--keypair', help="Keypair name to use for creating instance").completer = ac.keypair
-        hcreateparser.add_argument('-z', '--zone', help="Availability zone to create the instance in").completer = ac.availability_zone
-        hcreateparser.add_argument('-o', '--monitoring', action='store_true', help="Enable detailed cloudwatch monitoring")
-        hcreateparser.add_argument('-v', '--vpc-id', help="VPC ID (Not required, used to aid autocomplete for subnet id)").completer = ac.vpc_id
-        hcreateparser.add_argument('-s', '--subnet-id', help="Subnet ID for VPC").completer = ac.subnet_id
+        hcreateparser.add_argument('-r', '--region', help="Region to create the instance in").completer = htac.region
+        hcreateparser.add_argument('-y', '--instance-type', help="EC2 instance type", metavar='INSTANCE_TYPE', choices=self.instance_types)
+        hcreateparser.add_argument('-m', '--ami-id', help="AMI ID for the new instance").completer = htac.ami_id
+        hcreateparser.add_argument('-k', '--key-name', help="Keypair name to use for creating instance").completer = htac.keypair
+        hcreateparser.add_argument('-z', '--zone', help="Availability zone to create the instance in").completer = htac.availability_zone
+        hcreateparser.add_argument('-o', '--monitoring', action='store_true', help="Enable detailed cloudwatch monitoring", default=None)
+        hcreateparser.add_argument('-v', '--vpc-id', help="VPC ID (Not required, used to aid autocomplete for subnet id)").completer = htac.vpc_id
+        hcreateparser.add_argument('-s', '--subnet-id', help="Subnet ID for VPC").completer = htac.subnet_id
         hcreateparser.add_argument('-i', '--private-ip', help="Private IP address to assign to instance (VPC only)")
-        hcreateparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)").completer = ac.security_group_id
-        hcreateparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization")
+        hcreateparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)").completer = htac.security_group_id
+        hcreateparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization", default=None)
         hcreateparser.add_argument('-n', '--number', type=int, default=1, help="Number of instances to create")
         hcreateparser.add_argument('-a', '--name', help="Set the name tag for created instance")
         hcreateparser.add_argument('-t', '--tag', action='append', help="Add tag to the instance in the form tagname=tagvalue, eg: --tag my_tag=my_value (supports multiple usage)")
+        group = hcreateparser.add_mutually_exclusive_group()
+        group.add_argument('--template-id', help="Set a host template id to use to create instance")
+        group.add_argument('--template-name', help="Set a host template name to use to create instance")
         hcreateparser.set_defaults(func=self.command_host_create)
 
 
@@ -429,6 +443,82 @@ class InstanceManager(BaseManager):
         discparser.set_defaults(func=self.command_discover)
 
 
+        # ams host template
+        htempparser = hsubparser.add_parser('template', help="Management of host creation templates")
+        htempsubparser = htempparser.add_subparsers(title='operation', dest='operation')
+
+        # ams host template list
+        htemplistparser = htempsubparser.add_parser('list', help="List available host creation templates")
+        group = htemplistparser.add_mutually_exclusive_group()
+        group.add_argument('--template-id', help="Filter by template ID").completer = ac.host_template_id
+        group.add_argument('--template-name', help="Filter by template name").completer = ac.host_template_name
+        htemplistparser.add_argument('-r', '--region', help="Filter by region").completer = ac.region
+        htemplistparser.add_argument('-m', '--ami-id', help="Filter by AMI ID").completer = ac.ami_id
+        htemplistparser.add_argument('-z', '--zone', help="Filter by availability zone").completer = ac.availability_zone
+        htemplistparser.add_argument('-v', '--vpc-id', help="Filter by VPC ID").completer = ac.vpc_id
+        htemplistparser.add_argument('-s', '--subnet-id', help="Filter by VPC Subnet ID").completer = ac.subnet_id
+        htemplistparser.add_argument('-i', '--private-ip', help="Filter by private IP")
+        htemplistparser.add_argument('-a', '--name', help="Set the name tag for created instance")
+        htemplistparser.set_defaults(func=self.command_host_template_list)
+
+        # ams host template create
+        htempcreateparser = htempsubparser.add_parser('create', help="Create a new host template")
+        htempcreateparser.add_argument('-n', '--template-name', required=True, help="Unique name for the template")
+        htempcreateparser.add_argument('-r', '--region', help="Region to create the instance in").completer = ac.region
+        htempcreateparser.add_argument('-y', '--instance-type', help="EC2 instance type", metavar='INSTANCE_TYPE', choices=self.instance_types)
+        htempcreateparser.add_argument('-m', '--ami-id', help="AMI ID for the new instance").completer = ac.ami_id
+        htempcreateparser.add_argument('-k', '--key-name', help="Keypair name to use for creating instance").completer = ac.keypair
+        htempcreateparser.add_argument('-z', '--zone', help="Availability zone to create the instance in").completer = ac.availability_zone
+        htempcreateparser.add_argument('-o', '--monitoring', action='store_true', help="Enable detailed cloudwatch monitoring", default=None)
+        htempcreateparser.add_argument('-v', '--vpc-id', help="VPC ID (Not required, used to aid autocomplete for subnet id)").completer = ac.vpc_id
+        htempcreateparser.add_argument('-s', '--subnet-id', help="Subnet ID for VPC").completer = ac.subnet_id
+        htempcreateparser.add_argument('-i', '--private-ip', help="Private IP address to assign to instance (VPC only)")
+        htempcreateparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)", default=[]).completer = ac.security_group_id
+        htempcreateparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization", default=None)
+        htempcreateparser.add_argument('-a', '--name', help="Set the name tag for created instance")
+        htempcreateparser.add_argument('-t', '--tag', action='append', help="Add tag to the instance in the form tagname=tagvalue, eg: --tag my_tag=my_value (supports multiple usage)", default=[])
+        htempcreateparser.set_defaults(func=self.command_host_template_create)
+
+        # ams host template edit
+        htempeditparser = htempsubparser.add_parser('edit', help="Modify an existing host template")
+        group = htempeditparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--template-id', help="Set a host template id to edit").completer = ac.host_template_id
+        group.add_argument('--template-name', help="Set a host template name to edit").completer = ac.host_template_name
+        htempeditparser.add_argument('-r', '--region', help="Region to create the instance in").completer = htac.region
+        htempeditparser.add_argument('-y', '--instance-type', help="EC2 instance type", metavar='INSTANCE_TYPE', choices=self.instance_types)
+        htempeditparser.add_argument('-m', '--ami-id', help="AMI ID for the new instance").completer = htac.ami_id
+        htempeditparser.add_argument('-k', '--key-name', help="Keypair name to use for creating instance").completer = htac.keypair
+        htempeditparser.add_argument('-z', '--zone', help="Availability zone to create the instance in").completer = htac.availability_zone
+        htempeditparser.add_argument('-o', '--monitoring', action='store_true', help="Enable detailed cloudwatch monitoring", default=None)
+        htempeditparser.add_argument('-v', '--vpc-id', help="VPC ID (Not required, used to aid autocomplete for subnet id)").completer = htac.vpc_id
+        htempeditparser.add_argument('-s', '--subnet-id', help="Subnet ID for VPC").completer = htac.subnet_id
+        htempeditparser.add_argument('-i', '--private-ip', help="Private IP address to assign to instance (VPC only)")
+        htempeditparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)", default=[]).completer = htac.security_group_id
+        htempeditparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization", default=None)
+        htempeditparser.add_argument('-a', '--name', help="Set the name tag for created instance")
+        htempeditparser.add_argument('-t', '--tag', action='append', help="Add tag to the instance in the form tagname=tagvalue, eg: --tag my_tag=my_value (supports multiple usage)", default=[])
+        htempeditparser.add_argument('--remove', action='append', help="Remove the value for one of the settings: instance-type, ami-id, key-name, zone, monitoring, vpc-id, subnet-id, private-ip, ebs-optimized, name (supports multiple usage)", choices=['instance-type', 'ami-id', 'key-name', 'zone', 'monitoring', 'vpc-id', 'subnet-id', 'private-ip', 'ebs-optimized', 'name'], default=[])
+        htempeditparser.add_argument('--remove-tag', action='append', help="Remove a tag by name from the template (supports multiple usage)", default=[])
+        htempeditparser.add_argument('--remove-security-group', action='append', help="Remove a security group by id from the template (supports multiple usage)", default=[])
+        htempeditparser.set_defaults(func=self.command_host_template_edit)
+
+        # ams host template delete
+        htempdelparser = htempsubparser.add_parser('delete', help="Delete a host template (has no effect on hosts that have been created using the template)")
+        group = htempdelparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--template-id', help="Set a host template id to delete")
+        group.add_argument('--template-name', help="Set a host template name to delete")
+        htempdelparser.set_defaults(func=self.command_host_template_delete)
+
+        # ams host template copy
+        htempcopyparser = htempsubparser.add_parser('copy', help="Copy an existing template to a new template")
+        group = htempcopyparser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--template-id', help="Source template ID")
+        group.add_argument('--template-name', help="Source template name")
+        htempcopyparser.add_argument('--name', required=True, help="Name for the new template")
+        htempcopyparser.set_defaults(func=self.command_host_template_copy)
+
+
+        # ams host tag
         htagargs = argparse.ArgumentParser(add_help=False)
         htagargs.add_argument('--prefix', help="For host/name identification, treats the given string as a prefix", action='store_true')
         htagargs.add_argument('--like', help="For host/name identification, searches for instances that contain the given string", action='store_true')
@@ -438,7 +528,6 @@ class InstanceManager(BaseManager):
         htaggroup.add_argument('-H', '--host', help="hostname of an instance to manage tags")
         htaggroup.add_argument('-e', '--name', help="name of an instance to manage tags")
 
-        # ams host tag
         htagparser = hsubparser.add_parser("tag", help="Manage tags for instances")
         htagsubparser = htagparser.add_subparsers(title="operation", dest='operation')
 
@@ -482,20 +571,250 @@ class InstanceManager(BaseManager):
         hamilistparser.set_defaults(func=self.command_amilist)
 
 
-    def command_host_create(self, args):
+    def command_host_template_copy(self, args):
+        template_id = args.template_id
+        if args.template_name:
+            self.db.execute("select template_id from host_templates where template_name=%s", (args.template_name, ))
+            row = self.db.fetchone()
+            if row:
+                template_id = row[0]
+            else:
+                self.logger.error("Template {0} not found".format(args.template_name))
 
+        if not template_id:
+            return
+
+        self.db.execute("select * from host_templates where template_id=%s", (template_id, ))
+        row = self.db.fetchone()
+        if not row:
+            self.logger.error("unable to retrieve template {0}".format(template_id))
+            return
+
+        new_row = list(row)
+        new_row[0] = None
+        new_row[1] = args.name
+
+        self.db.execute("insert into host_templates values({0})".format(", ".join(['%s' for x in range(len(new_row))])), new_row)
+        self.dbconn.commit()
+        new_template_id = self.db.lastrowid
+        self.db.execute("select * from host_template_tags where template_id=%s", (template_id, ))
+        rows = self.db.fetchall()
+        if rows:
+            for row in rows:
+                new_row = list(row)
+                new_row[0] = new_template_id
+                self.db.execute("insert into host_template_tags values ({0})".format(", ".join(['%s' for x in range(len(new_row))])), new_row)
+                self.dbconn.commit()
+
+        self.db.execute("select * from host_template_sg_associations where template_id=%s", (template_id, ))
+        rows = self.db.fetchall()
+        if rows:
+            for row in rows:
+                new_row = list(row)
+                new_row[0] = new_template_id
+                self.db.execute("insert into host_template_sg_associations values ({0})".format(", ".join(['%s' for x in range(len(new_row))])), new_row)
+                self.dbconn.commit()
+
+        self.logger.info("New template created with id {0}".format(new_template_id))
+
+
+
+    def command_host_template_list(self, args):
+        fields = ['template_id', 'template_name', 'region', 'ami_id', 'zone', 'vpc_id', 'subnet_id', 'private_ip', 'name']
+        wheres = []
+        wherevals = []
+        for field in fields:
+            val = getattr(args, field)
+            if val is not None:
+                wheres.append("{0}=%s".format(field))
+                wherevals.append(val)
+        headers = ['template id', 'template name', 'region', 'instance type', 'ami_id', 'keypair', 'zone', 'monitoring', 'vpc_id', 'subnet_id', 'private_ip', 'ebs optimized', 'name', 'security groups', 'tags']
+        where = ''
+        if len(wheres):
+            where = 'where {0}'.format(" and ".join(wheres))
+        sql = "select h.template_id, template_name, region, instance_type, ami_id, key_name, zone, monitoring, vpc_id, subnet_id, private_ip, if(ebs_optimized, 'yes', 'no'), h.name, group_concat(distinct security_group_id separator '\n'), group_concat(distinct concat(t.name,'=',t.value) separator '\n') from host_templates h left join host_template_tags t using(template_id) left join host_template_sg_associations s using(template_id) {0} group by template_id".format(where)
+        self.db.execute(sql, wherevals)
+        rows = self.db.fetchall()
+        if not rows:
+            rows = []
+
+        self.output_formatted("Host Creation Templates", headers, rows)
+
+    def command_host_template_create(self, args):
+        tags = self.__command_parse_tags(args.tag)
+        if tags is None:
+            return
+        self.db.execute("insert into host_templates set template_name=%s, region=%s, instance_type=%s, ami_id=%s, zone=%s, monitoring=%s, vpc_id=%s, subnet_id=%s, private_ip=%s, ebs_optimized=%s, `name`=%s",
+            (args.template_name, args.region, args.instance_type, args.ami_id, args.zone, args.monitoring, args.vpc_id, args.subnet_id, args.private_ip, args.ebs_optimized, args.name))
+        self.dbconn.commit()
+        template_id = self.db.lastrowid
+        for sg in args.security_group:
+            self.db.execute("insert into host_template_sg_associations set template_id=%s, security_group_id=%s on duplicate key update security_group_id=%s",(template_id, sg, sg))
+            self.dbconn.commit()
+        for tagname, tagvalue in tags.iteritems():
+            self.db.execute("insert into host_template_tags set template_id=%s, `name`=%s, `value`=%s on duplicate key update `value`=%s",(template_id, tagname, tagvalue, tagvalue))
+            self.dbconn.commit()
+
+
+    def command_host_template_edit(self, args):
+        tags = self.__command_parse_tags(args.tag)
+        if tags is None:
+            return
+        template_id = args.template_id
+        if args.template_name:
+            self.db.execute("select template_id from host_templates where template_name=%s", (args.template_name, ))
+            row = self.db.fetchone()
+            if row:
+                template_id = row[0]
+            else:
+                self.logger.error("Template {0} not found".format(args.template_name))
+
+        if template_id:
+            fields = ['instance_type', 'ami_id', 'key_name', 'zone', 'monitoring', 'vpc_id', 'subnet_id', 'private_ip', 'ebs_optimized', 'name']
+
+            clears = []
+            for field in args.remove:
+                fieldname = field.replace('-','_')
+                if fieldname in fields:
+                    clears.append("{0}=NULL")
+            if len(clears):
+                self.db.execute("update host_templates set {0} where template_id=%s".format(", ".join(clears)), (template_id, ))
+                self.dbconn.commit()
+
+            for tagname in args.remove_tag:
+                self.db.execute("delete from host_template_tags where template_id=%s and `name`=%s", (template_id, tagname))
+                self.dbconn.commit()
+
+            for sg in args.remove_security_group:
+                self.db.execute("delete from host_template_sg_associations where template_id=%s and security_group_id=%s", (template_id, sg))
+                self.dbconn.commit()
+
+            sets = []
+            setvals = []
+            for field in fields:
+                val = getattr(args, field)
+                if val is not None:
+                    sets.append("{0}=%s".format(field))
+                    setvals.append(val)
+
+            if len(sets):
+                setvals.append(template_id)
+                self.db.execute("update host_templates set {0} where template_id=%s", setvals)
+                self.dbconn.commit()
+
+            for sg in args.security_group:
+                self.db.execute("insert into host_template_sg_associations set template_id=%s, security_group_id=%s on duplicate key update security_group_id=%s",(template_id, sg, sg))
+                self.dbconn.commit()
+            for tagname, tagvalue in tags.iteritems():
+                self.db.execute("insert into host_template_tags set template_id=%s, `name`=%s, `value`=%s on duplicate key update `value`=%s",(template_id, tagname, tagvalue, tagvalue))
+                self.dbconn.commit()
+
+            if len(sets) or len(tags) or len(args.security_group):
+                self.logger.info("Template {0} updated".format(template_id))
+            else:
+                self.logger.info("No updates provided")
+
+
+
+    def command_host_template_delete(self, args):
+        template_id = args.template_id
+        if args.template_name:
+            self.db.execute("select template_id from host_templates where template_name=%s", (args.template_name, ))
+            row = self.db.fetchone()
+            if row:
+                template_id = row[0]
+            else:
+                self.logger.error("Template {0} not found".format(args.template_name))
+
+        if template_id:
+            self.db.execute("delete from host_templates where template_id=%s", (template_id, ))
+            self.db.execute("delete from host_template_tags where template_id=%s", (template_id, ))
+            self.db.execute("delete from host_template_sg_associations where template_id=%s", (template_id, ))
+            self.dbconn.commit()
+            self.logger.info("Template {0} deleted".format(template_id))
+
+
+    def __command_parse_tags(self, command_tag_list):
         tags = {}
-        if args.tag:
-            for tag in args.tag:
+        if command_tag_list:
+            for tag in command_tag_list:
                 parts = tag.split('=')
                 if len(parts) != 2:
                     self.logger.error("Tag {0} not in the form tagname=tagvalue".format(tag))
-                    return
+                    return None
                 tags[parts[0].strip()] = parts[1].strip()
+        return tags
+
+    def command_host_create(self, args):
+        tags = self.__command_parse_tags(args.tag)
+        # if there was an error parsing tags, then it will be None here
+        if tags is None:
+            return
+
+        template_data = None
+        template_id = args.template_id
+        if args.template_name:
+            self.db.execute("select template_id from host_templates where template_name=%s", (args.template_name, ))
+            row = self.db.fetchone()
+            if row:
+                template_id = row[0]
+            else:
+                self.logger.error("Template {0} not found".format(args.template_name))
+                return
+
+        if template_id:
+            self.db.execute("select region, instance_type, ami_id, key_name, zone, monitoring, vpc_id, subnet_id, private_ip, ebs_optimized, `name` from host_templates where template_id=%s", (template_id, ))
+            row = self.db.fetchone()
+            if not row:
+                self.logger.error("Template {0} not found".format(template_id))
+                return
+            template_data = row
+
+            self.db.execute("select security_group_id from host_template_sg_associations where template_id=%s", (template_id, ))
+            sgrows = self.db.fetchall()
+
+            self.db.execute("select `name`, `value` from host_template_tags where template_id=%s", (template_id, ))
+            tagrows = self.db.fetchall()
+
+            if sgrows:
+                for sg in sgrows:
+                    if sg not in args.security_group:
+                        args.security_group.append(sg)
+            if tagrows:
+                for tagrow in tagrows:
+                    if tagrow[0] not in tags:
+                        tags[tagrow[0]] = tagrow[1]
+
+            if template_data:
+                cols = ['region', 'instance_type', 'ami_id', 'key_name', 'zone', 'monitoring', 'vpc_id', 'subnet_id', 'private_ip', 'ebs_optimized', 'name']
+                col_id = 0
+                for col in cols:
+                    if template_data[col_id] is not None:
+                        if getattr(args, col) is None:
+                            setattr(args, col, template_data[col_id])
+                    col_id += 1
+        is_ok = True
+        template_message = ''
+        if template_id:
+            template_message = ' or defined in template'
+        if args.region is None:
+            self.logger.error("--region must be provided as an option{0}".format(template_message))
+            is_ok = False
+        if args.ami_id is None:
+            self.logger.error("--ami-id must be provided as an option{0}".format(template_message))
+            is_ok = False
+        if args.instance_type is None:
+            self.logger.error("instance-type must be provided as an option{0}".format(template_message))
+            is_ok = False
+
+        if not is_ok:
+            self.logger.error("No instance created")
+            return
+
         if args.name:
             tags['Name'] = args.name
 
-        self.create_instance(region=args.region, ami_id=args.ami_id, instance_type=args.instance_type, number=args.number, keypair=args.keypair, zone=args.zone, monitoring=args.monitoring, vpc_id=args.vpc_id, subnet_id=args.subnet_id, private_ip=args.private_ip, security_groups=args.security_group, ebs_optimized=args.ebs_optimized, tags=tags)
+        self.create_instance(region=args.region, ami_id=args.ami_id, instance_type=args.instance_type, number=args.number, keypair=args.key_name, zone=args.zone, monitoring=args.monitoring, vpc_id=args.vpc_id, subnet_id=args.subnet_id, private_ip=args.private_ip, security_groups=args.security_group, ebs_optimized=args.ebs_optimized, tags=tags)
 
 
     def command_amilist(self, args):

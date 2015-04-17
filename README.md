@@ -179,7 +179,15 @@ Arguments:
 Create new instance(s) with the givens settings. The cli completions for many of the options are contextual based on options that have been 
 provided up to the point that completion is being done. Providing region will help filter zone, ami-id, vpc-id and security-group; providing 
 zone will help filter subnet-id; providing vpc-id will help filter security-group and subnet-id. Example: `ams host create --region us-west-2 --zone <TAB><TAB>` 
-will give autocomplete options only for zones that are in region already given.     
+will give autocomplete options only for zones that are in region already given.
+ 
+Using --template-id or --template-name, a template can be defined for the instance creation. The set of required arguments is the same, but 
+depending on the configuration of the template, some or all of these requirements may be fulfilled such that the only option that is required 
+to create an instance is a template-id or template-name. Any options passed in addition to the template identifier will override values in the 
+template with the exception of tags and security groups. Security groups will be combined into the union of the security groups defined in the 
+template and the ones provided as arguments. Tags will be combined as the union of all tag names along with their corresponding values, and in 
+the case of a conflict on tag name the value that is passed as an argument will be used. Contextual command line autocomplete also takes into 
+account the values for a template (overriding template context with passed arguments) when doing completions. 
 
 Required Arguments: --region, --ami-id, --instance-type
     * VPC Required Arguments: --subnet-id
@@ -193,7 +201,7 @@ Arguments:
                             EC2 instance type
       -m AMI_ID, --ami-id AMI_ID
                             AMI ID for the new instance
-      -k KEYPAIR, --keypair KEYPAIR
+      -k KEY_NAME, --key-name KEY_NAME
                             Keypair name to use for creating instance
       -z ZONE, --zone ZONE  Availability zone to create the instance in
       -o, --monitoring      Enable detailed cloudwatch monitoring
@@ -213,7 +221,10 @@ Arguments:
       -a NAME, --name NAME  Set the name tag for created instance
       -t TAG, --tag TAG     Add tag to the instance in the form tagname=tagvalue,
                             eg: --tag my_tag=my_value (supports multiple usage)
-
+      --template-id TEMPLATE_ID
+                            Set a host template id to use to create instance
+      --template-name TEMPLATE_NAME
+                            Set a host template name to use to create instance
 ----
 
 #### `ams host add`
@@ -285,6 +296,156 @@ Arguments:
                             defined for the instance in AMS (uname will override
                             FQDN)
       -z ZONE, --zone ZONE  availability zone that the instance is in
+
+----
+
+#### `ams host template list`
+Lists all available host templates, filtered by provided arguments.
+
+Arguments:
+
+      --template-id TEMPLATE_ID
+                            Filter by template ID
+      --template-name TEMPLATE_NAME
+                            Filter by template name
+      -r REGION, --region REGION
+                            Filter by region
+      -m AMI_ID, --ami-id AMI_ID
+                            Filter by AMI ID
+      -z ZONE, --zone ZONE  Filter by availability zone
+      -v VPC_ID, --vpc-id VPC_ID
+                            Filter by VPC ID
+      -s SUBNET_ID, --subnet-id SUBNET_ID
+                            Filter by VPC Subnet ID
+      -i PRIVATE_IP, --private-ip PRIVATE_IP
+                            Filter by private IP
+      -a NAME, --name NAME  Set the name tag for created instance
+
+----
+
+#### `ams host template create`
+Create a new host creation template. The only absolutely required argument is a unique template name. Any of the fields that 
+are provided in the template, but are required for host creation, must be provided at when running `ams host create`. --tag 
+and --security-group can be provided multiple times to add multiple tags and security groups respectively.
+
+Required Arguments: --template-name
+
+Arguments:
+
+      -n TEMPLATE_NAME, --template-name TEMPLATE_NAME
+                            Unique name for the template
+      -r REGION, --region REGION
+                            Region to create the instance in
+      -y INSTANCE_TYPE, --instance-type INSTANCE_TYPE
+                            EC2 instance type
+      -m AMI_ID, --ami-id AMI_ID
+                            AMI ID for the new instance
+      -k KEY_NAME, --key-name KEY_NAME
+                            Keypair name to use for creating instance
+      -z ZONE, --zone ZONE  Availability zone to create the instance in
+      -o, --monitoring      Enable detailed cloudwatch monitoring
+      -v VPC_ID, --vpc-id VPC_ID
+                            VPC ID (Not required, used to aid autocomplete for
+                            subnet id)
+      -s SUBNET_ID, --subnet-id SUBNET_ID
+                            Subnet ID for VPC
+      -i PRIVATE_IP, --private-ip PRIVATE_IP
+                            Private IP address to assign to instance (VPC only)
+      -g SECURITY_GROUP, --security-group SECURITY_GROUP
+                            Security group to associate with instance (supports
+                            multiple usage)
+      -e, --ebs-optimized   Enable EBS optimization
+      -a NAME, --name NAME  Set the name tag for created instance
+      -t TAG, --tag TAG     Add tag to the instance in the form tagname=tagvalue,
+                            eg: --tag my_tag=my_value (supports multiple usage)
+
+----
+
+#### `ams host template edit`
+Comparable to create for most options, except that template-id or template-name is required to identify the template for editing 
+and the addition of the arguments: --remove, --remove-tag, --remove-security-group. --remove allows you to clear the value for the 
+given field so that the template no longer will provide a value for it. --remove-tag and --remove-security-group are for disassociating
+host tags and security groups respectively from a template so that those will no longer be auto added to newly created instances using 
+the template. --remove* arguments can each be provided multiple times as well. Note: when applying edits to a template, remove operations 
+are applied before add operations, eg: `ams host template edit --template-id 1 --remove-tag foo --tag foo=something` will remove tag `foo` 
+and then will create tag `foo` with value `something` (it is not required to remove a tag first before adding it; in this example the --tag 
+argument would be all that is required as it will update the value of the `foo` tag).   
+
+Required Arguments: --template-id|--template-name
+
+Arguments:
+
+      --template-id TEMPLATE_ID
+                            Set a host template id to edit
+      --template-name TEMPLATE_NAME
+                            Set a host template name to edit
+      -r REGION, --region REGION
+                            Region to create the instance in
+      -y INSTANCE_TYPE, --instance-type INSTANCE_TYPE
+                            EC2 instance type
+      -m AMI_ID, --ami-id AMI_ID
+                            AMI ID for the new instance
+      -k KEY_NAME, --key-name KEY_NAME
+                            Keypair name to use for creating instance
+      -z ZONE, --zone ZONE  Availability zone to create the instance in
+      -o, --monitoring      Enable detailed cloudwatch monitoring
+      -v VPC_ID, --vpc-id VPC_ID
+                            VPC ID (Not required, used to aid autocomplete for
+                            subnet id)
+      -s SUBNET_ID, --subnet-id SUBNET_ID
+                            Subnet ID for VPC
+      -i PRIVATE_IP, --private-ip PRIVATE_IP
+                            Private IP address to assign to instance (VPC only)
+      -g SECURITY_GROUP, --security-group SECURITY_GROUP
+                            Security group to associate with instance (supports
+                            multiple usage)
+      -e, --ebs-optimized   Enable EBS optimization
+      -a NAME, --name NAME  Set the name tag for created instance
+      -t TAG, --tag TAG     Add tag to the instance in the form tagname=tagvalue,
+                            eg: --tag my_tag=my_value (supports multiple usage)
+      --remove {instance-type,ami-id,key-name,zone,monitoring,vpc-id,subnet-id,private-ip,ebs-optimized,name}
+                            Remove the value for one of the settings: instance-
+                            type, ami-id, key-name, zone, monitoring, vpc-id,
+                            subnet-id, private-ip, ebs-optimized, name (supports
+                            multiple usage)
+      --remove-tag REMOVE_TAG
+                            Remove a tag by name from the template (supports
+                            multiple usage)
+      --remove-security-group REMOVE_SECURITY_GROUP
+                            Remove a security group by id from the template
+                            (supports multiple usage)
+
+
+----
+
+#### `ams host template delete`
+Deletes a host creation template by either name or id
+
+Required Arguments: --template-id|--template-name
+
+Arguments:
+
+      --template-id TEMPLATE_ID
+                            Set a host template id to delete
+      --template-name TEMPLATE_NAME
+                            Set a host template name to delete
+
+
+----
+
+#### `ams host template copy`
+Copy a host template to a new template
+
+Required Arguments: --template-id|--template-name, --name
+
+Arguments:
+
+      --template-id TEMPLATE_ID
+                            Source template ID
+      --template-name TEMPLATE_NAME
+                            Source template name
+      --name NAME           Name for the new template
+
 
 ----
 

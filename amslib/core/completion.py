@@ -4,6 +4,13 @@ from amslib.core.manager import BaseManager
 
 class ArgumentCompletion(BaseManager):
 
+    # leaving this here in a comment to ease debugging until i get a chance to build a proper debug mode
+    # TODO build proper debug mode
+    # import pprint
+    # with open('/tmp/ams_completion_debug.log','wb') as fh:
+    #     fh.write(pprint.pformat(kwargs))
+
+
     def _general_db_completion(self, table, column, need_distinct=True, filters={}):
         rval = []
         distinct = ''
@@ -140,3 +147,94 @@ class ArgumentCompletion(BaseManager):
     def config_name(self, **kwargs):
         filters = {'configurable': 1}
         return self._general_db_completion('config', '`var`', False, filters)
+
+
+    def host_template_id(self, **kwargs):
+        filters = {}
+        if 'parsed_args' in kwargs and 'region' in kwargs['parsed_args'] and kwargs['parsed_args'].region:
+            filters['region'] = kwargs['parsed_args'].region
+        elif 'parsed_args' in kwargs and 'zone' in kwargs['parsed_args'] and kwargs['parsed_args'].zone:
+            r = self.__region_from_az(kwargs['parsed_args'].zone)
+            if r:
+                filters['region'] = r
+        return self._general_db_completion('host_templates', 'template_id', False, filters)
+
+    def host_template_name(self, **kwargs):
+        filters = {}
+        if 'parsed_args' in kwargs and 'region' in kwargs['parsed_args'] and kwargs['parsed_args'].region:
+            filters['region'] = kwargs['parsed_args'].region
+        elif 'parsed_args' in kwargs and 'zone' in kwargs['parsed_args'] and kwargs['parsed_args'].zone:
+            r = self.__region_from_az(kwargs['parsed_args'].zone)
+            if r:
+                filters['region'] = r
+        return self._general_db_completion('host_templates', 'template_name', False, filters)
+
+
+    def template_tag(self, **kwargs):
+        filters = {}
+        if 'parsed_args' in kwargs and 'template_id' in kwargs['parsed_args'] and kwargs['parsed_args'].template_id:
+            filters['template_id'] = kwargs['parsed_args'].template_id
+        if 'parsed_args' in kwargs and 'template_name' in kwargs['parsed_args'] and kwargs['parsed_args'].template_name:
+            filters['template_name'] = kwargs['parsed_args'].template_name
+        return self._general_db_completion('host_templates_tags', 'name', True, filters)
+
+    def template_security_group(self, **kwargs):
+        filters = {}
+        if 'parsed_args' in kwargs and 'template_id' in kwargs['parsed_args'] and kwargs['parsed_args'].template_id:
+            filters['template_id'] = kwargs['parsed_args'].template_id
+        if 'parsed_args' in kwargs and 'template_name' in kwargs['parsed_args'] and kwargs['parsed_args'].template_name:
+            filters['template_name'] = kwargs['parsed_args'].template_name
+        return self._general_db_completion('host_templates_sg_associations', 'security_group_id', True, filters)
+
+
+class HostTemplateArgumentCompletion(ArgumentCompletion):
+
+    def map_template_values_to_parsed_args(self, **kwargs):
+        template_row = None
+        if 'parsed_args' in kwargs and 'template_id' in kwargs['parsed_args'] and kwargs['parsed_args'].template_id:
+            self.db.execute("select region, instance_type, ami_id, key_name, zone, monitoring, vpc_id, subnet_id, private_ip, ebs_optimized, name from host_templates where template_id=%s", (kwargs['parsed_args'].template_id, ))
+            template_row = self.db.fetchone()
+        elif 'parsed_args' in kwargs and 'template_name' in kwargs['parsed_args'] and kwargs['parsed_args'].template_name:
+            self.db.execute("select region, instance_type, ami_id, key_name, zone, monitoring, vpc_id, subnet_id, private_ip, ebs_optimized, name from host_templates where template_name=%s", (kwargs['parsed_args'].template_name, ))
+            template_row = self.db.fetchone()
+
+        if template_row:
+            cols = ['region', 'instance_type', 'ami_id', 'key_name', 'zone', 'monitoring', 'vpc_id', 'subnet_id', 'private_ip', 'ebs_optimized', 'name']
+            col_id = 0
+            for col in cols:
+                if template_row[col_id] is not None:
+                    if getattr(kwargs['parsed_args'], col) is None:
+                        setattr(kwargs['parsed_args'], col, template_row[col_id])
+                col_id += 1
+
+
+    def region(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.region(self, **kwargs)
+
+    def ami_id(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.ami_id(self, **kwargs)
+
+    def keypair(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.keypair(self, **kwargs)
+
+    def availability_zone(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.availability_zone(self, **kwargs)
+
+    def vpc_id(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.vpc_id(self, **kwargs)
+
+    def subnet_id(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.subnet_id(self, **kwargs)
+
+    def security_group_id(self, **kwargs):
+        self.map_template_values_to_parsed_args(**kwargs)
+        return ArgumentCompletion.security_group_id(self, **kwargs)
+
+
+

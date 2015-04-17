@@ -1,6 +1,14 @@
 aws-management-suite Change Log
 ===============================
 
+### April 17, 2015
+* Add host creation templates and tools to manage templates
+ * `ams host template list` list available templates
+ * `ams host template create` create new templates
+ * `ams host template edit` edit existing templates
+ * `ams host template delete` delete templates
+ * `ams host create` now accepts a template id or template name to use as a basis for host creation, and contextual autocomplete updated to include template data into contexts   
+
 ### April 15, 2015
 * Added support for creating instances using `ams host create`
  * added more contextual support for completions so that completions get filtered better based on options already provided 
