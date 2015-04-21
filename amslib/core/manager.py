@@ -2,6 +2,7 @@ import MySQLdb
 import argparse
 import prettytable
 import logging
+from errors import *
 
 class BaseManager(object):
     def __init__(self, settings):
@@ -15,6 +16,7 @@ class BaseManager(object):
         self.logger = self.get_logger()
         self.boto_conns = {}
         self.__subinit__()
+        self._az_region_map = {}
 
     def __subinit__(self):
         ''' Called  by the constructor to allow subclasses to have their own unique constructors '''
@@ -67,7 +69,13 @@ class BaseManager(object):
         return self.settings.logger
 
     def parse_region_from_availability_zone(self, availability_zone):
-        return availability_zone[0:len(availability_zone) - 1]
+        if availability_zone not in self._az_region_map:
+            self.db.execute("select region from availability_zones where availability_zone = %s", (availability_zone, ))
+            row = self.db.fetchone()
+            if not row:
+                raise InvalidValue("Availability zone not found, to load availability zone data try running: ams host discovery")
+            self._az_region_map[availability_zone] = row[0]
+        return self._az_region_map[availability_zone]
 
     def argparse_stub(self):
         raise NotImplemented('argparse_stub() must be implemented for dynamic modules')

@@ -33,6 +33,7 @@ class ArgumentCompletion(BaseManager):
             for row in rows:
                 if row[0]:
                     rval.append(row[0])
+        rval = [str(elem) for elem in rval]
         return rval
 
 

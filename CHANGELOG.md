@@ -1,8 +1,12 @@
 aws-management-suite Change Log
 ===============================
 
+### April 21, 2015
+* Added support for controlling instance state using `ams host control`
+* Fixed a few small bugs related to template management and host creation using templates
+
 ### April 17, 2015
-* Add host creation templates and tools to manage templates
+* Added host creation templates and tools to manage templates
  * `ams host template list` list available templates
  * `ams host template create` create new templates
  * `ams host template edit` edit existing templates

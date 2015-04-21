@@ -18,3 +18,6 @@ class DependencyRequired(AMSError):
 
 class InvalidModule(AMSError):
     pass
+
+class InvalidValue(AMSError):
+    pass

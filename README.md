@@ -299,6 +299,20 @@ Arguments:
 
 ----
 
+#### `ams host control (instance_action) (instance_id [instance_id [instance_id...]])`
+Start, stop, reboot or terminate a host or set of hosts. Valid values for instance_action are `start`, `stop`, `reboot` and `terminate`, 
+and one or more instance ids must be provided for the action. If `--execute` is not provided, a list of all instances that the action 
+would be applied to is shown but the action is not taken on the instances. 
+
+Required Arguments: instance_action, instance_id+
+
+Arguments:
+
+      --execute             Applies the action to the given instances, otherwise,
+                            a list of instances that would be shut down is listed
+
+----
+
 #### `ams host template list`
 Lists all available host templates, filtered by provided arguments.
 

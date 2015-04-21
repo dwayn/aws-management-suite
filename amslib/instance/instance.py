@@ -323,7 +323,6 @@ class InstanceManager(BaseManager):
         botoconn = self.__get_boto_conn(region)
 
 
-
         # apply proper defaults for things that need them
         if monitoring is None:
             monitoring = False
@@ -362,6 +361,54 @@ class InstanceManager(BaseManager):
                         self.db.execute("update hosts set name=%s where instance_id=%s", (tagvalue, instance.id))
                         self.dbconn.commit()
 
+
+    def control_instances(self, action, instance_ids=[]):
+        if not len(instance_ids):
+            raise InstanceNotFound("No instances provided")
+        regions = {}
+        self.db.execute("select instance_id, availability_zone from hosts where instance_id in ({0})".format(", ".join(['%s' for x in range(len(instance_ids))])), instance_ids)
+        rows = self.db.fetchall()
+        if not rows:
+            raise InstanceNotFound("No instances found matching given instance_ids")
+        for row in rows:
+            instance_id, az = row
+            region = self.parse_region_from_availability_zone(az)
+            if region not in regions:
+                regions[region] = []
+            regions[region].append(instance_id)
+
+        actioned = {}
+        for region in regions:
+            actioned[region] = []
+            botoconn = self.__get_boto_conn(region)
+            if action == 'start':
+                self.logger.info("starting instances in region: {0}".format(region))
+                fn = botoconn.start_instances
+            elif action == 'stop':
+                self.logger.info("stopping instances in region: {0}".format(region))
+                fn = botoconn.stop_instances
+            elif action == 'reboot':
+                self.logger.info("rebooting instances in region: {0}".format(region))
+                fn = botoconn.reboot_instances
+            elif action == 'terminate':
+                self.logger.info("terminating instances in region: {0}".format(region))
+                fn = botoconn.terminate_instances
+            else:
+                raise InvalidInstanceAction("{0} is not a valid control action for an instance".format(action))
+
+            done = fn(regions[region])
+            # apparently reboot just returns true or false whether it was successful or not (argh at lack of consistency)
+            if action == 'reboot':
+                if done:
+                    actioned[region] = regions[region]
+                continue
+            for i in done:
+                actioned[region].append(i.id)
+                if action == 'terminate':
+                    self.db.execute("update hosts set `terminated`=1 where instance_id=%s", (i.id, ))
+                    self.dbconn.commit()
+
+        return actioned
 
     def argparse_stub(self):
         return 'host'
@@ -426,14 +473,14 @@ class InstanceManager(BaseManager):
         hcreateparser.add_argument('-v', '--vpc-id', help="VPC ID (Not required, used to aid autocomplete for subnet id)").completer = htac.vpc_id
         hcreateparser.add_argument('-s', '--subnet-id', help="Subnet ID for VPC").completer = htac.subnet_id
         hcreateparser.add_argument('-i', '--private-ip', help="Private IP address to assign to instance (VPC only)")
-        hcreateparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)").completer = htac.security_group_id
+        hcreateparser.add_argument('-g', '--security-group', action='append', help="Security group to associate with instance (supports multiple usage)", default=[]).completer = htac.security_group_id
         hcreateparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization", default=None)
         hcreateparser.add_argument('-n', '--number', type=int, default=1, help="Number of instances to create")
         hcreateparser.add_argument('-a', '--name', help="Set the name tag for created instance")
         hcreateparser.add_argument('-t', '--tag', action='append', help="Add tag to the instance in the form tagname=tagvalue, eg: --tag my_tag=my_value (supports multiple usage)")
         group = hcreateparser.add_mutually_exclusive_group()
-        group.add_argument('--template-id', help="Set a host template id to use to create instance")
-        group.add_argument('--template-name', help="Set a host template name to use to create instance")
+        group.add_argument('--template-id', help="Set a host template id to use to create instance").completer = ac.host_template_id
+        group.add_argument('--template-name', help="Set a host template name to use to create instance").completer = ac.host_template_name
         hcreateparser.set_defaults(func=self.command_host_create)
 
 
@@ -518,6 +565,14 @@ class InstanceManager(BaseManager):
         htempcopyparser.set_defaults(func=self.command_host_template_copy)
 
 
+        # ams host control
+        hcontrolparser = hsubparser.add_parser("control", help="Control the running state of hosts")
+        hcontrolparser.add_argument('instance_action', help="Action to take on host", choices=['start', 'stop', 'reboot', 'terminate'])
+        hcontrolparser.add_argument('instances', nargs='+', help="Instance ID to take action on ").completer = ac.instance_id
+        hcontrolparser.add_argument('--execute', action='store_true', help="Applies the action to the given instances, otherwise, a list of instances that would be shut down is listed")
+        hcontrolparser.set_defaults(func=self.command_control)
+
+
         # ams host tag
         htagargs = argparse.ArgumentParser(add_help=False)
         htagargs.add_argument('--prefix', help="For host/name identification, treats the given string as a prefix", action='store_true')
@@ -570,6 +625,22 @@ class InstanceManager(BaseManager):
         hamilistparser.add_argument('-r', '--region', help="Filter by region").completer = ac.region
         hamilistparser.set_defaults(func=self.command_amilist)
 
+
+    def command_control(self, args):
+        if not args.execute:
+            self.db.execute("select instance_id, host, name, availability_zone, vpc_id, subnet_id from hosts where instance_id in ({0})".format(", ".join(['%s' for x in range(len(args.instances))])), args.instances)
+            rows = self.db.fetchall()
+            if not rows:
+                rows = []
+            self.output_formatted("Instances to {0}".format(args.instance_action.upper()), ['Instance ID', 'Host', 'Name', 'Availability Zone', 'VPC ID', 'Subnet ID'], rows)
+            return
+
+        actioned = self.control_instances(args.instance_action, args.instances)
+        output = []
+        for region in actioned:
+            for instance_id in actioned[region]:
+                output.append((instance_id, region))
+        self.output_formatted("Successfully applied {0}".format(args.instance_action.upper()), ['Instance ID', 'Region'], output)
 
     def command_host_template_copy(self, args):
         template_id = args.template_id
@@ -699,7 +770,7 @@ class InstanceManager(BaseManager):
 
             if len(sets):
                 setvals.append(template_id)
-                self.db.execute("update host_templates set {0} where template_id=%s", setvals)
+                self.db.execute("update host_templates set {0} where template_id=%s".format(", ".join(sets)), setvals)
                 self.dbconn.commit()
 
             for sg in args.security_group:
@@ -779,12 +850,11 @@ class InstanceManager(BaseManager):
             if sgrows:
                 for sg in sgrows:
                     if sg not in args.security_group:
-                        args.security_group.append(sg)
+                        args.security_group.append(sg[0])
             if tagrows:
                 for tagrow in tagrows:
                     if tagrow[0] not in tags:
                         tags[tagrow[0]] = tagrow[1]
-
             if template_data:
                 cols = ['region', 'instance_type', 'ami_id', 'key_name', 'zone', 'monitoring', 'vpc_id', 'subnet_id', 'private_ip', 'ebs_optimized', 'name']
                 col_id = 0

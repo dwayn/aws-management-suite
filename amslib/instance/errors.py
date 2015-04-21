@@ -9,5 +9,6 @@ class InstanceManagerError(Exception):
 class InstanceNotFound(InstanceManagerError):
     pass
 
-
+class InvalidInstanceAction(InstanceManagerError):
+    pass
 
