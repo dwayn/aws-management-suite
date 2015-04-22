@@ -1,6 +1,15 @@
 aws-management-suite Change Log
 ===============================
 
+### April 22, 2015
+* Fixed some small bugs in `ams-inventory` related to applying tag templates properly
+* Added some contextual autocomplete to `ams-inventory` to speed up management of group hierarchies
+* Added sorting arguments for `ams host template list` to aid in management
+* Deprecated `ams host add` in lieu of `ams host create` and host discovery functions
+* Rewrote the internals of `ams host list` operation to query build in a much nicer way
+* Added the ability to filter by tags when running `ams host list`
+* Updates to documentation
+
 ### April 21, 2015
 * Added support for controlling instance state using `ams host control`
 * Fixed a few small bugs related to template management and host creation using templates

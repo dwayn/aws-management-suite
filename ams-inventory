@@ -8,6 +8,7 @@ import re
 from amslib.core.version import DATABASE_VERSION
 from amslib.core.config import Config
 from amslib.core.manager import BaseManager
+from amslib.core.completion import ArgumentCompletion
 from pprint import pprint
 try:
     import json
@@ -113,9 +114,10 @@ class AmsInventory:
 
 
     def _add_template(self, template, templatevars, templatefilters):
-        templatevars.sort()
+        sorted = list(templatevars)
+        sorted.sort()
         curnode = self.templates
-        for tplvar in templatevars:
+        for tplvar in sorted:
             if tplvar not in curnode:
                 curnode[tplvar] = {}
                 curnode[tplvar]['{{templates}}'] = []
@@ -145,7 +147,6 @@ class AmsInventory:
             if not templateok:
                 continue
             self._add_host(group, name)
-
 
 
     def _get_templates(self, curnode, keys, results):
@@ -307,11 +308,12 @@ class AmsInventory:
             return instance_id
 
     def list_groups(self, group_id=None):
-        sql = "select g1.name as parent, group_concat(g2.name order by g2.name asc separator '\n') as children " \
+        # the crazy looking if() in the query is there to sort all the groups without subgroups to the bottom of the list
+        sql = "select g1.name as parent, group_concat(g2.name order by g2.name asc separator '\n') as children, if(count(g2.name) > 0, g1.name, concat('~~~~',g1.name)) as sorting_order " \
               "from inventory_groups g1 " \
               "left join inventory_group_map m on g1.inventory_group_id=m.parent_id " \
               "left join inventory_groups g2 on g2.inventory_group_id=m.child_id {0} " \
-              "group by g1.inventory_group_id order by g1.name"
+              "group by g1.inventory_group_id order by sorting_order"
         where = ''
         queryvars = []
         if group_id is not None:
@@ -326,9 +328,8 @@ class AmsInventory:
         if rows:
             for row in rows:
                 data.append((row['parent'], row['children']))
-                data.append((' ',' '))
                 count += 1
-        self.bm.output_formatted('Inventory Groups', headers, data, "{0} groups".format(count))
+        self.bm.output_formatted('Inventory Groups', headers, data, "{0} groups".format(count),insert_breaks=1)
 
     def list_templates(self, template_id=None):
         sql = "select inventory_group_template_id as id, template from inventory_group_templates"
@@ -461,6 +462,7 @@ class AmsInventory:
 
 
     def print_inventory(self):
+        ac = ArgumentCompletion(settings)
         parser = argparse.ArgumentParser(prog="ams-inventory", description="AMS based dynamic inventory for ansible")
         group = parser.add_mutually_exclusive_group()
         group.add_argument('--list', action='store_true', help="Lists all of the hosts in ansible dynamic inventory format")
@@ -470,9 +472,9 @@ class AmsInventory:
         group.add_argument('--add-tag-template', metavar='TEMPLATE', help="Add a new group tagging template. Eg. In the case of a server that is tagged with the tags env=stage and role=webserver and a template that is defined as '{{env}}-{{role}}', the dynamic inventory will add the host to a group with the name 'stage-webserver'. The template tags can also be filtered using the syntax '{{name=value}}'. Eg. a template '{{env=stage}}-{{role}}' would be applied to a host with env=stage and role=webserver, but not a host with env=prod and role=webserver.")
         group.add_argument('--edit-tag-template', nargs=2, metavar=('TEMPLATE_ID', 'TEMPLATE'), help="Edit an existing group tagging template")
         group.add_argument('--delete-tag-template', type=int, help="Delete a tag template", metavar='TEMPLATE_ID')
-        group.add_argument('--add-group', nargs='+', metavar=('GROUP_NAME', 'CHILD_NAME [CHILD_NAME]'), help="Add a new inventory group with name GROUP_NAME. Optionally include the child groups for GROUP_NAME. Note: this is an additive operation rather than replacement operation.")
-        group.add_argument('--delete-group', help="Remove an inventory group and its mapping of children", metavar="GROUP_NAME")
-        group.add_argument('--remove-group-children', nargs='+', help="Remove one or more children from a group", metavar=("GROUP_NAME", "CHILD_NAME [CHILD_NAME]"))
+        group.add_argument('--add-group', nargs='+', metavar=('GROUP_NAME', 'CHILD_NAME [CHILD_NAME]'), help="Add a new inventory group with name GROUP_NAME. Optionally include the child groups for GROUP_NAME. Note: this is an additive operation rather than replacement operation.").completer = ac.inventory_group
+        group.add_argument('--delete-group', help="Remove an inventory group and its mapping of children", metavar="GROUP_NAME").completer = ac.inventory_group
+        group.add_argument('--remove-group-children', nargs='+', help="Remove one or more children from a group", metavar=("GROUP_NAME", "CHILD_NAME [CHILD_NAME]"), default=[]).completer = ac.inventory_group_children
 
         argcomplete.autocomplete(parser)
         args = parser.parse_args()

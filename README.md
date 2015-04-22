@@ -11,49 +11,60 @@ is focused on EBS volume, raid and snapshot management of single and raid volume
 that are not fully addressed by other tools.
 
 ## Current Features
-SSH client
-* password or private key based login
-* support for sudo login (password or passwordless)
-* captures stdout, stderr and exit code from command run
-
 EBS Volumes (managed as groups of volumes)
-* create volume/raid
-* delete volume/raid
-* attach volume/raid
-* detach volume/raid
-* create software raid volume
-* partition and format new volumes/raids
-* (re)assemble software raid from existing (or newly cloned) ebs volumes
-* mount volume/raid
-* unmount volume/raid
+* Manages groups of one or more ebs volumes as if they were a single volume and handles the underlying group operations for all of the following  
+ * Create
+ * Delete
+ * Attach
+ * Detach
+ * Automatically creates and configures software raid for multi-volume groups when creating new volume groups
+ * Partition and format new volume
+ * Mount volume group
+ * Unmount volume group
+* Internally handles all of the metadata associated with the raid volume configuration, so that when a volume group is attached to an instance, the raid is automatically assembled and system configured
+* Raid support currently requires that `mdadm` package be installed on the destination system
+* Partitioning and formatting require that `mkfs.FILESYSTEM` is available on the system for `FILESYSTEM`, eg. `mkfs.ext3` normally exists on most distributions, but `mkfs.xfs` is only available after installing `xfsprogs`
 
 EBS Snapshots (managed as groups of snapshots)
-* pre/post snapshot hooks to enable running commands/scripts on target host before and after starting snapshot to ensure consistent point in time snapshot of all volumes in a raid group
-* copy snapshot group to another region (only handled internally currently)
-* clone snapshot group to new volume group and optionally attach/mount on a host
-* clone latest snapshot of a volume group or host/instance + mount point
-* schedule regular snapshots of volume/raid with managed grandfather/father/son expiration
-* automatable purging of expired snapshots
+* Pre/post snapshot hooks to enable running commands/scripts on target host before and after starting snapshot to ensure consistent point in time snapshot of all volumes in a raid group
+* Copy snapshot group to another region (only handled internally currently for cloning a snapshot group into a volume group in another region)
+* Clone snapshot group to new volume group and optionally attach/mount on a host
+* Clone latest snapshot of a volume group or host/instance + mount point
+* Schedule regular snapshots of volume/raid with managed grandfather/father/son expiration
+* Automatable purging of expired snapshots
 
 Instance Management
-* Instances can be manually added or edited using `ams host add` or `ams host edit` respectively
-* Instance discovery has been implemented, allowing the hosts table to be automatically populated
+* Instances can be created using `ams host create`
+* Templates for host creation can be managed using `ams host template ...` functionality
+ * `ams host create` accepts a template id or template name when creating an instance, allowing you to create a new instance or set of instance with only a single command line option
+* Instance discovery has been implemented, allowing the host information to be automatically populated
 * Regions and availability_zones information imported into AMS database 
+* Support for viewing the available key pairs for launching instances
+* Support for viewing the available AMIs for instances (only currently pulls private AMIs)
 
 Route53
 * Discovery has been implemented to synchronize the local database with the current state of Route53 DNS records and health checks
-* create raw DNS record
-* create DNS record for a specific host without explicitly defining a number of the parameters that are on the host (optionally also configure a Route53 health check for the host)
-* create Route53 health checks
-* support for managing Simple, Weighted Round Robin, Failover, and Latency routing policies in Route53 records
-* delete DNS record
+* Create raw DNS record
+* Create DNS record for a specific host without explicitly defining a number of the parameters that are on the host (optionally also configure a Route53 health check for the host)
+* Create Route53 health checks
+* Support for managing Simple, Weighted Round Robin, Failover, and Latency routing policies in Route53 records
+* Delete DNS record
 
 Instance Tagging
 * Management of instance tags is supported with ability to add/edit/remove tags on single hosts or many with advanced tag based filtering
+ * Tags are used by `ams-inventory` to provide groups for hosts in ansible. 
+* A number of operations now allow actions of commands to be filtered by tags
+* Integration of tagging into host creation and templates
 
 Networking
 * Discovery has been implemented to gather the information on security groups and their association across all regions
 * Tools for viewing security groups 
+* Integration of security groups into host creation and templating
+
+VPC
+* Discovery has been implemented to gather data about VPCs and their subnets
+* Tools for viewing VPCs and subnets
+* Integration of VPCs and subnets into host creation and templates
 
 [Ansible Integration](#cms_integration)
 * A dynamic inventory script has been added that uses the data in the AMS database to power your inventory needs for ansible
@@ -62,12 +73,17 @@ Networking
  * Templating support includes filtering so that templates can apply to hosts with specific tag values
 * Command line management of groups and templates using same script that ansible uses as inventory
 
+SSH client
+* Password or private key based login
+* Handles sudo login (password or passwordless)
+* Captures stdout, stderr and exit code from command run
+
 ## Change Log
 Changes that are made are now being tracked in the [CHANGELOG](CHANGELOG.md)
 
 ## Setup and Configuration
 ### Initial installation
-* This tool will only work on systems with python 2.6+ (due to paramiko requirements), but to date has only been tested on 2.6.6 and 2.7.6 but should run on any 2.6.x or 2.7.x version (3.x compatibility is unknown but unlikely). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
+* This tool will only work on systems with python 2.6+ (due to paramiko requirements), but to date has only been tested on 2.6.6 and 2.7.6 but should run on any 2.6.x or 2.7.x version (3.x compatibility is unlikely). If you find that it specifically does or does not work on any version please let me know and I will add it to this list.
 * The tool requires ssh and sudo access to hosts in order to accomplish tasks like mounting volumes and running system commands to start/stop services (for snapshots)
 * Copy defaults.ini to /etc/ams.ini or ~/ams.ini and edit AWS, SSH and SUDO access credentials
 * A MySQL database needs to be setup for tracking state. The following statements assume that the mysql database and the tool are located on the same host:
@@ -98,7 +114,8 @@ In order from highest to lowest priority:
 This project makes use of the argcomplete library (https://github.com/kislyuk/argcomplete) to provide dynamic completion. As part of the pip installation,
 the library will be installed, but completion will still need to be enabled. Due to some multi-platform issues I experienced trying to enable global completeion,
 I opted to use specific completion. All that is needed is to add these lines to your .bashrc, .profile or .bash_profile (depending on which your OS uses) and then reload
-your terminal or `source .bashrc` (or .profile or .bash_profile).
+your terminal or `source .bashrc` (or .profile/.bash_profile). Using completion is encouraged for interactive users, particularly since many of the argument completions 
+are now dynamic and contextual.
 
 `eval "$(register-python-argcomplete ams)"`
 `eval "$(register-python-argcomplete ams-inventory)"`
@@ -111,67 +128,52 @@ corrupting data in the database due to expectations in the software.
 
 
 
-# Management Tool Usage
+# AMS Management Tool Usage
 
 ## General
 All of the functionality is through the command line tool `ams`. It has been implemented as a multi-level nested command parser using the argparse module.<br>
 If at any point you need help just add `-h` or `--help` flag to the command line and it will list all available sub-commands and options for the current command level.<br>
-There are still a few legacy command structures that need to be cleaned up, so there may be some minor changes to the syntax to a few of these, but I will attempt to keep these to an absolute minimum.
+There are still a few legacy command structures that need to be cleaned up, so there may be some minor changes to the syntax to a few of these, but I will attempt to keep 
+these to an absolute minimum. The option `-q` or  `--scriptable-output` can be passed after `ams` but before any of the subcommands to change the output into a tab delimited 
+format rather than a structured table that many functions display; this is to aid in writing shell scripts using AMS. Eg. `ams -q host list` will output the same data as 
+`ams host list` but it will be formatted as tab delimited, and no headers or footers will be displayed. 
 
 
 ## Host/Instance
-#### `ams host list`
-With no options this lists all host entries in the database
+#### `ams host list [SEARCH_FIELD] [SEARCH_VALUE]`
+With no options this lists all host entries in the database. Filtering can be done on host, instance_id, and name properties by 
+providing a `SEARCH_FIELD` and `SEARCH_VALUE`. Wildcard matching can be done on these properties by passing `--like` (`SEARCH_FIELD` 
+contains `LIKE`) and `--prefix` (`SEARCH_FIELD` starts with `PREFIX`). Filtering can also be done on the availability zone that the 
+instance is in using `--zone`, this is a prefix match as well. 
+
+Hosts can also be filtered by the tags on the instances by passing one or more 
+`--tag` options with the value of them in the form `--tag tagname<OPERATOR>value`, eg. `--tag env=prod` will match hosts that have a tag 
+named "env" with value of "prod; conversely `--tag env!=prod` will match hosts that do not have an "env" tag with the value "prod". Support for 
+prefix and contains matching can be achieved with the `=:` and `=~` type operators respectively along with their negated versions.
 
 Arguments:
 
-      --zone ZONE         Availability zone to filter results by. This is a prefix
-                          search so any of the following is valid with increasing
-                          specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
+      --like LIKE           string to find within 'search-field'
+      --prefix PREFIX       string to prefix match against 'search-field'
+      --zone ZONE           Availability zone to filter results by. This is a
+                            prefix search so any of the following is valid with
+                            increasing specificity: 'us', 'us-west', 'us-west-2',
+                            'us-west-2a'
       -x, --extended        Show extended information on hosts
       -a, --all             Include terminated instances (that have been added via
                             discovery)
       --terminated          Show only terminated instances (that have been added
                             via discovery)
-      -g, --tags            Display tags for instances
-
-----
-
-#### `ams host list host [hostname]`
-If `hostname` is given then it will match hostname exactly
-
-Arguments:
-
-      --like LIKE         wildcard matches hostname
-      --prefix PREFIX     prefix matches hostname
-      --zone ZONE         Availability zone to filter results by. This is a prefix
-                          search so any of the following is valid with increasing
-                          specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
-      -x, --extended        Show extended information on hosts
-      -a, --all             Include terminated instances (that have been added via
-                            discovery)
-      --terminated          Show only terminated instances (that have been added
-                            via discovery)
-      -g, --tags            Display tags for instances
-
-----
-
-#### `ams host list instance [instance id]`
-If `instance id` is given then it will match instance_id exactly
-
-Arguments:
-
-      --like LIKE         wildcard matches instance id
-      --prefix PREFIX     prefix matches instance id
-      --zone ZONE         Availability zone to filter results by. This is a prefix
-                          search so any of the following is valid with increasing
-                          specificity: 'us', 'us-west', 'us-west-2', 'us-west-2a'
-      -x, --extended        Show extended information on hosts
-      -a, --all             Include terminated instances (that have been added via
-                            discovery)
-      --terminated          Show only terminated instances (that have been added
-                            via discovery)
-      -g, --tags            Display tags for instances
+      -s, --show-tags       Display tags for instances
+      -t TAG, --tag TAG     Filter instances by tag, in the form name<OPERATOR>value.
+                            Valid operators: 
+                                =	(equal)
+                                !=	(not equal)
+                                =~	(contains/like)
+                                !=~	(not contains/not like)
+                                =:	(prefixed by)
+                                !=:	(not prefixed by)
+                            Eg. To match Name tag containing 'foo': --tag Name=~foo
 
 ----
 
@@ -228,6 +230,8 @@ Arguments:
 ----
 
 #### `ams host add`
+**DEPRECATED:** This has been deprecated in lieu of the completion of `ams host discovery` and `ams host create` for managing the data in the database.
+
 Add a host to the hosts table so that resources on the host can be managed. This has effectively been replaced by the host discovery and host create functionality.
 
 Required arguments: --instance, --host, --zone
@@ -466,7 +470,7 @@ Arguments:
 #### `ams host tag list`
 Lists the tags for an instance or group of instances. With no arguments, it will list all instances and their tags. Instances can 
 be identified by host or name (with support for wildcard matching using --like or --prefix) or instance id. Furthermore, instances 
-can be matched or filtered by tags using one or more --tag arguments.
+can be matched or filtered by tags using one or more --tag arguments. 
 
 Arguments:
 

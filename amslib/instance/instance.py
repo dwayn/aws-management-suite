@@ -428,7 +428,7 @@ class InstanceManager(BaseManager):
         hsubparser = parser.add_subparsers(title="action", dest='action')
 
         # ams host list
-        hlistparser = hsubparser.add_parser("list", help="list currently managed hosts")
+        hlistparser = hsubparser.add_parser("list", help="list currently managed hosts", formatter_class=ArgParseSmartFormatter)
         hlistparser.add_argument('search_field', nargs="?", help="field to search (host or instance_id)", choices=['host', 'instance_id', 'name'])
         hlistparser.add_argument('field_value', nargs="?", help="exact match search value")
         hlistparser.add_argument("--like", help="string to find within 'search-field'")
@@ -438,7 +438,10 @@ class InstanceManager(BaseManager):
         hlistparser.add_argument("-a", "--all", help="Include terminated instances (that have been added via discovery)", action='store_true')
         hlistparser.add_argument("--terminated", help="Show only terminated instances (that have been added via discovery)", action='store_true')
         hlistparser.add_argument("-s", "--show-tags", help="Display tags for instances", action='store_true')
+        hlistparser.add_argument('-t', '--tag', help="R|Filter instances by tag, in the form name<OPERATOR>value.\nValid operators: \n\t=\t(equal)\n\t!=\t(not equal)\n\t=~\t(contains/like)\n\t!=~\t(not contains/not like)\n\t=:\t(prefixed by)\n\t!=:\t(not prefixed by)\nEg. To match Name tag containing 'foo': --tag Name=~foo", action='append')
         hlistparser.set_defaults(func=self.command_host_list)
+
+        # hsubparser.add_parser("info", help="Get information on a host")
 
         addeditargs = argparse.ArgumentParser(add_help=False)
         addeditargs.add_argument('-i', '--instance', help="Instance ID of the instance to add", required=True).completer = ac.instance_id
@@ -509,6 +512,7 @@ class InstanceManager(BaseManager):
         htemplistparser.add_argument('-s', '--subnet-id', help="Filter by VPC Subnet ID").completer = ac.subnet_id
         htemplistparser.add_argument('-i', '--private-ip', help="Filter by private IP")
         htemplistparser.add_argument('-a', '--name', help="Set the name tag for created instance")
+        htemplistparser.add_argument('--sort', nargs='+', help="Sort by given one or more of the fields: template-id, template-name, region, instance-type, ami-id, zone, vpc-id, subnet-id, name", choices=['template-id', 'template-name', 'region', 'instance-type', 'ami-id', 'zone', 'vpc-id', 'subnet-id', 'name'], metavar='FIELD', default=[])
         htemplistparser.set_defaults(func=self.command_host_template_list)
 
         # ams host template create
@@ -547,6 +551,7 @@ class InstanceManager(BaseManager):
         htempeditparser.add_argument('-e', '--ebs-optimized', action='store_true', help="Enable EBS optimization", default=None)
         htempeditparser.add_argument('-a', '--name', help="Set the name tag for created instance")
         htempeditparser.add_argument('-t', '--tag', action='append', help="Add tag to the instance in the form tagname=tagvalue, eg: --tag my_tag=my_value (supports multiple usage)", default=[])
+        htempeditparser.add_argument('--new-template-name', help="Change the template-name for the given template")
         htempeditparser.add_argument('--remove', action='append', help="Remove the value for one of the settings: instance-type, ami-id, key-name, zone, monitoring, vpc-id, subnet-id, private-ip, ebs-optimized, name (supports multiple usage)", choices=['instance-type', 'ami-id', 'key-name', 'zone', 'monitoring', 'vpc-id', 'subnet-id', 'private-ip', 'ebs-optimized', 'name'], default=[])
         htempeditparser.add_argument('--remove-tag', action='append', help="Remove a tag by name from the template (supports multiple usage)", default=[])
         htempeditparser.add_argument('--remove-security-group', action='append', help="Remove a security group by id from the template (supports multiple usage)", default=[])
@@ -706,13 +711,16 @@ class InstanceManager(BaseManager):
         where = ''
         if len(wheres):
             where = 'where {0}'.format(" and ".join(wheres))
-        sql = "select h.template_id, template_name, region, instance_type, ami_id, key_name, zone, monitoring, vpc_id, subnet_id, private_ip, if(ebs_optimized, 'yes', 'no'), h.name, group_concat(distinct security_group_id separator '\n'), group_concat(distinct concat(t.name,'=',t.value) separator '\n') from host_templates h left join host_template_tags t using(template_id) left join host_template_sg_associations s using(template_id) {0} group by template_id".format(where)
+        sorts = ""
+        if len(args.sort):
+            sorts = "order by `" + "`, `".join([str(x).replace('-', '_') for x in args.sort]) + '`'
+        sql = "select h.template_id, template_name, region, instance_type, ami_id, key_name, zone, monitoring, vpc_id, subnet_id, private_ip, if(ebs_optimized, 'yes', 'no'), h.name, group_concat(distinct security_group_id separator '\n'), group_concat(distinct concat(t.name,'=',t.value) separator '\n') from host_templates h left join host_template_tags t using(template_id) left join host_template_sg_associations s using(template_id) {0} group by template_id {1}".format(where, sorts)
         self.db.execute(sql, wherevals)
         rows = self.db.fetchall()
         if not rows:
             rows = []
 
-        self.output_formatted("Host Creation Templates", headers, rows)
+        self.output_formatted("Host Creation Templates", headers, rows, insert_breaks=1)
 
     def command_host_template_create(self, args):
         tags = self.__command_parse_tags(args.tag)
@@ -770,6 +778,9 @@ class InstanceManager(BaseManager):
                 if val is not None:
                     sets.append("{0}=%s".format(field))
                     setvals.append(val)
+            if args.new_template_name:
+                sets.append("template_name=%s")
+                setvals.append(args.new_template_name)
 
             if len(sets):
                 setvals.append(template_id)
@@ -1007,8 +1018,6 @@ class InstanceManager(BaseManager):
         if whereclause:
             whereclause = "where {0}".format(whereclause)
 
-# select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host, tags.name as tagname, tags.value, tags.type from hosts left join tags on tags.resource_id=hosts.instance_id where hosts.name like 'prod.web%' group by instance_id  having sum(tags.name = 'Name' and tags.value = 'prod.web.lb') = 0) as h left join tags t on t.resource_id=h.instance_id
-
         if args.operation == 'list':
             sql = "select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host, tags.name as tagname, tags.value, tags.type from hosts left join tags on tags.resource_id=hosts.instance_id {0} group by instance_id {1}) as h left join tags t on t.resource_id=h.instance_id".format(whereclause, filterclause)
             self.db.execute(sql, queryvars)
@@ -1076,17 +1085,22 @@ class InstanceManager(BaseManager):
 
     def command_host_list(self, args):
         whereclauses = []
+        qryvars = []
         order_by = ''
         if args.search_field:
             if args.field_value:
-                whereclauses.append("{0} = '{1}'".format(args.search_field, args.field_value))
+                whereclauses.append("{0} = %s".format(args.search_field))
+                qryvars.append(args.field_value)
             elif args.like:
-                whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.like))
+                whereclauses.append("{0} like %s".format(args.search_field))
+                qryvars.append('%' + args.like + '%')
             elif args.prefix:
-                whereclauses.append("{0} like '%{1}%'".format(args.search_field, args.prefix))
+                whereclauses.append("{0} like %s".format(args.search_field))
+                qryvars.append(args.prefix + '%')
             order_by = ' order by {0}'.format(args.search_field)
         if args.zone:
-            whereclauses.append("availability_zone like '{0}%'".format(args.zone))
+            whereclauses.append("availability_zone like %s")
+            qryvars.append(args.zone)
             if not order_by:
                 order_by = ' order by availability_zone'
 
@@ -1097,30 +1111,79 @@ class InstanceManager(BaseManager):
         else:
             whereclauses.append("`terminated` = 0")
 
-        extended = ""
-        joins = ""
-        groupby = ""
-        headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "notes"]
+        filterclauses = []
+        filtervals = []
+        filterclause = ''
+        if args.tag:
+            for tagarg in args.tag:
+                tagname = None
+                tagvalue = None
+                operator = '='
+                prewild = ''
+                postwild = ''
+                sumoperator = '>'
+                if '!=:' in tagarg:
+                    tagname, tagvalue = tagarg.split('!=:', 1)
+                    operator = 'like'
+                    postwild = '%'
+                    sumoperator = '='
+                elif '!=~' in tagarg:
+                    tagname, tagvalue = tagarg.split('!=~', 1)
+                    operator = 'like'
+                    postwild = '%'
+                    prewild = '%'
+                    sumoperator = '='
+                elif '!=' in tagarg:
+                    tagname, tagvalue = tagarg.split('!=', 1)
+                    operator = '='
+                    sumoperator = '='
+                elif '=~' in tagarg:
+                    tagname, tagvalue = tagarg.split('=~', 1)
+                    operator = 'like'
+                    postwild = '%'
+                    prewild = '%'
+                elif '=:' in tagarg:
+                    tagname, tagvalue = tagarg.split('=:', 1)
+                    operator = 'like'
+                    postwild = '%'
+                elif '=' in tagarg:
+                    tagname, tagvalue = tagarg.split('=', 1)
+                else:
+                    self.logger.error('Unable to parse tag filter, unknown format: "{0}"'.format(tagarg))
+                    return
+
+                if tagname and tagvalue:
+                    filterclauses.append("sum(t.name = %s and t.value {0} %s) {1} 0".format(operator, sumoperator))
+                    filtervals.append(tagname)
+                    filtervals.append(prewild + tagvalue + postwild)
+
+            if len(filtervals):
+                qryvars += filtervals
+                filterclause = "having " + " and ".join(filterclauses)
+
+
+        whereclause = "where " + ", ".join(whereclauses)
+        headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "vpc_id", 'subnet_id']
+        cols = ['h.host', 'instance_id', 'availability_zone', 'h.name', 'h.ip_internal', 'h.ip_external', 'h.vpc_id', 'h.subnet_id']
+
         if args.extended:
-            extended = ", case `terminated` when 0 then 'no' when 1 then 'yes' end"
-            headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "notes", "term"]
+            cols.append("case `terminated` when 0 then 'no' when 1 then 'yes' end")
+            headers.append("term")
+
         if args.show_tags:
+            cols.append("group_concat(concat(t.name,'=',t.value) SEPARATOR '\n')")
             headers.append('tags')
-            extended += ", group_concat(concat(tags.name, ':\t', tags.value) SEPARATOR '\n')"
-            joins = " left join tags on tags.resource_id=hosts.instance_id"
-            groupby = " group by instance_id"
-        sql = "select host, instance_id, availability_zone, hosts.name, ip_internal, ip_external, notes{0} from hosts{1}".format(extended, joins)
-        if len(whereclauses):
-            sql += " where " + " and ".join(whereclauses)
-        sql += groupby
-        sql += order_by
-        self.db.execute(sql)
+
+        sql = "select {0} from hosts h left join tags t on t.resource_id = h.instance_id {1} group by h.instance_id {2} {3}".format(", ".join(cols), whereclause, filterclause, order_by)
+
+        self.db.execute(sql, qryvars)
         results = self.db.fetchall()
 
-        self.output_formatted("Hosts", headers, results)
+        self.output_formatted("Hosts", headers, results, insert_breaks=1)
 
 
     def command_host_add(self, args):
+        self.logger.warn("host add command is deprecated and will soon be removed")
         self.db.execute("insert into hosts(`instance_id`, `host`, `availability_zone`, `hostname_internal`, `hostname_external`, `ip_internal`, "
                    "`ip_external`, `ami_id`, `instance_type`, `notes`, `name`, `uname`) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (args.instance,
                                                                                                          args.hostname,

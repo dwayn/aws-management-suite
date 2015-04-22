@@ -187,6 +187,29 @@ class ArgumentCompletion(BaseManager):
             filters['template_name'] = kwargs['parsed_args'].template_name
         return self._general_db_completion('host_templates_sg_associations', 'security_group_id', True, filters)
 
+    def inventory_group(self, **kwargs):
+        filters = {}
+        return self._general_db_completion('inventory_groups', 'name', False, filters)
+
+    def inventory_group_children(self, **kwargs):
+        import pprint
+        filters = {}
+        if 'parsed_args' in kwargs and 'remove_group_children' in kwargs['parsed_args'] and kwargs['parsed_args'].remove_group_children:
+            args = kwargs['parsed_args'].remove_group_children
+            if len(args):
+                self.db.execute("select c.name from inventory_groups p left join inventory_group_map m on m.parent_id=p.inventory_group_id left join inventory_groups c on c.inventory_group_id=m.child_id where p.name=%s", (args[0], ))
+                rval = []
+                rows = self.db.fetchall()
+                if rows:
+                    for row in rows:
+                        if row[0]:
+                            rval.append(row[0])
+                rval = [str(elem) for elem in rval]
+                return rval
+            else:
+                return self._general_db_completion('inventory_groups', 'name', False, filters)
+        return self._general_db_completion('inventory_groups', 'name', False, filters)
+
 
 class HostTemplateArgumentCompletion(ArgumentCompletion):
 
