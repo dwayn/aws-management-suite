@@ -94,10 +94,10 @@ class InstanceManager(BaseManager):
                 ids = self.db.fetchall()
                 if ids:
                     for ami_id in ids:
-                        self.db.execute("delete from ami_block_devices where ami_id=%s", (ami_id, ))
+                        self.db.execute("delete from ami_block_devices where ami_id=%s", (ami_id[0], ))
                         self.dbconn.commit()
-                    self.db.execute('delete from amis where ami_id=%s', (ami_id, ))
-                    self.dbconn.commit()
+                        self.db.execute('delete from amis where ami_id=%s', (ami_id[0], ))
+                        self.dbconn.commit()
         except boto.exception.EC2ResponseError as e:
             if e.code != 'AuthFailure':
                 raise
