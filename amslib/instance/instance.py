@@ -214,7 +214,7 @@ class InstanceManager(BaseManager):
                 else:
                     raise
         if tagname == 'Name':
-            self.db.execute("update hosts set name=%s where instance_id=%s", (tagname, instance_id))
+            self.db.execute("update hosts set name=%s where instance_id=%s", (tagvalue, instance_id))
             self.dbconn.commit()
         self.db.execute("insert into tags set resource_id=%s, name=%s, value=%s, type=%s, removed=0 on duplicate key update value=%s, removed=0", (instance_id, tagname, tagvalue, tagtype, tagvalue))
         self.dbconn.commit()
