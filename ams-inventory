@@ -294,7 +294,6 @@ class AmsInventory:
 
 
     def json(self):
-        return ""
         return json.dumps(self.inventory, sort_keys=True, indent=4)
 
     def get_host_vars(self, host):
