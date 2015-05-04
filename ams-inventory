@@ -112,6 +112,9 @@ class AmsInventory:
                 self.inventory['_meta']['hostvars'][name] = {}
             self.inventory['_meta']['hostvars'][name][row['name']] = row['value']
 
+        if prev_id:
+            self._apply_templates(self._format_name(prev_id), tags)
+
 
     def _add_template(self, template, templatevars, templatefilters):
         sorted = list(templatevars)
@@ -291,6 +294,7 @@ class AmsInventory:
 
 
     def json(self):
+        return ""
         return json.dumps(self.inventory, sort_keys=True, indent=4)
 
     def get_host_vars(self, host):
