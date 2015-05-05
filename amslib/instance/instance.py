@@ -1162,7 +1162,7 @@ class InstanceManager(BaseManager):
                 filterclause = "having " + " and ".join(filterclauses)
 
 
-        whereclause = "where " + ", ".join(whereclauses)
+        whereclause = "where " + " and ".join(whereclauses)
         headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "vpc_id", 'subnet_id']
         cols = ['h.host', 'instance_id', 'availability_zone', 'h.name', 'h.ip_internal', 'h.ip_external', 'h.vpc_id', 'h.subnet_id']
 
