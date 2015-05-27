@@ -1161,8 +1161,10 @@ class InstanceManager(BaseManager):
                 qryvars += filtervals
                 filterclause = "having " + " and ".join(filterclauses)
 
-
-        whereclause = "where " + " and ".join(whereclauses)
+        if len(whereclauses):
+            whereclause = "where " + " and ".join(whereclauses)
+        else:
+            whereclause = ""
         headers = ["Hostname", "instance_id", "availability_zone", "name", "private ip", "public ip", "vpc_id", 'subnet_id']
         cols = ['h.host', 'instance_id', 'availability_zone', 'h.name', 'h.ip_internal', 'h.ip_external', 'h.vpc_id', 'h.subnet_id']
 
