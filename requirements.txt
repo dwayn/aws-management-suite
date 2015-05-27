@@ -1,4 +1,4 @@
-paramiko
+paramiko>=1.7.7.1
 mysql-python
 boto>=2.36.0
 argparse
