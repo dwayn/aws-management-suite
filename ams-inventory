@@ -87,7 +87,7 @@ class AmsInventory:
 
 
     def _load_tags(self):
-        self.db.execute('select resource_id, name, value, type from tags where resource_id like "i-%"')
+        self.db.execute('select tags.resource_id as resource_id, tags.name as name, tags.value as value, tags.type as type from hosts inner join tags on tags.resource_id = hosts.instance_id where hosts.terminated=0 order by resource_id')
         rows = self.db.fetchall()
         if not rows:
             return
