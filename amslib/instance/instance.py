@@ -1017,6 +1017,9 @@ class InstanceManager(BaseManager):
 
         if whereclause:
             whereclause = "where {0}".format(whereclause)
+            whereclause += "and 'terminated'=0"
+        else:
+            whereclause = "where 'terminated'=0"
 
         if args.operation == 'list':
             sql = "select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host, tags.name as tagname, tags.value, tags.type from hosts left join tags on tags.resource_id=hosts.instance_id {0} group by instance_id {1}) as h left join tags t on t.resource_id=h.instance_id".format(whereclause, filterclause)
@@ -1088,6 +1091,8 @@ class InstanceManager(BaseManager):
         qryvars = []
         order_by = ''
         if args.search_field:
+            if args.search_field == 'name':
+                args.search_field = 'h.name'
             if args.field_value:
                 whereclauses.append("{0} = %s".format(args.search_field))
                 qryvars.append(args.field_value)
