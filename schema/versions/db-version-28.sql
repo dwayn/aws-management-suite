@@ -1,4 +1,4 @@
-ALTER TABLE `ami_block_devices` MODIFY COLUMN `snapshot_id` VARCHAR(25) DEFAULT NULL; 
+ALTER TABLE `ami_block_devices` MODIFY COLUMN `snapshot_id` VARCHAR(25) DEFAULT NULL;
 
 --
 
