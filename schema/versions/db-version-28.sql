@@ -10,7 +10,7 @@ ALTER TABLE `deleted_snapshots` MODIFY COLUMN `volume_id` VARCHAR(25) DEFAULT NU
 
 --
 
-ALTER TABLE `deleted_volumes` MODIFY COLUMN `volume_id` VARCHAR(25) DEFAULT NULL;
+ALTER TABLE `deleted_volumes` MODIFY COLUMN `volume_id` VARCHAR(25) NOT NULL DEFAULT '';
 
 --
 
@@ -22,11 +22,11 @@ ALTER TABLE `host_volumes` MODIFY COLUMN `instance_id` VARCHAR(25) DEFAULT NULL;
 
 --
 
-ALTER TABLE `hosts` MODIFY COLUMN `instance_id` VARCHAR(25) DEFAULT NULL;
+ALTER TABLE `hosts` MODIFY COLUMN `instance_id` VARCHAR(25) NOT NULL DEFAULT '';
 
 --
 
-ALTER TABLE `security_group_associations` MODIFY COLUMN `instance_id` VARCHAR(25) DEFAULT NULL;
+ALTER TABLE `security_group_associations` MODIFY COLUMN `instance_id` VARCHAR(25) NOT NULL DEFAULT '';
 
 --
 
@@ -34,8 +34,8 @@ ALTER TABLE `snapshot_schedules` MODIFY COLUMN `instance_id` VARCHAR(25) DEFAULT
 
 --
 
-ALTER TABLE `snapshots` MODIFY COLUMN `snapshot_id` VARCHAR(25) DEFAULT NULL;
+ALTER TABLE `snapshots` MODIFY COLUMN `snapshot_id` VARCHAR(25) NOT NULL DEFAULT '';
 
 --
 
-ALTER TABLE `volumes` MODIFY COLUMN `volume_id` VARCHAR(25) DEFAULT NULL;
+ALTER TABLE `volumes` MODIFY COLUMN `volume_id` VARCHAR(25) NOT NULL DEFAULT '';

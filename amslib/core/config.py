@@ -77,8 +77,17 @@ class Config:
                              db=self.TRACKING_DB['dbname'])
         db = dbconn.cursor()
         try:
-            db.execute("select var, value, type, env_overrides from config")
-            rows = db.fetchall()
+            try:
+                db.execute("select var, value, type, env_overrides from config")
+                rows = db.fetchall()
+            except _mysql_exceptions.OperationalError as e:
+                # this handles the case where the old version of the software is running database version < 16 and identifies that the database needs upgrade rather than install
+                if e.args[0] == 1054:
+                    db.execute("select var, value, null, null from config")
+                    rows = db.fetchall()
+                    self.NEED_UPGRADE = True
+                else:
+                    raise
             if not rows:
                 self._logger.critical("Database has not been installed, before continuing you must run: ams internals database install")
                 self.NEED_INSTALL = True
@@ -96,6 +105,9 @@ class Config:
                         value = bool(int(value))
                     elif vartype == 'path':
                         value = os.path.realpath(os.path.expanduser(value))
+                # ensure at least database version is properly typed for the legacy upgrade case
+                if vartype is None and name == 'DATABASE_VERSION':
+                    value = int(value)
 
                 self._dbconfigs[str(name)] = value
                 if env_overrides:
