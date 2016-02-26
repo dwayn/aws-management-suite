@@ -126,6 +126,9 @@ class Route53Manager(BaseManager):
         ipaddr = None
         if 'IPAddress' in health_check['HealthCheckConfig']:
             ipaddr = health_check['HealthCheckConfig']['IPAddress']
+	caller_ref = None
+	if 'CallerReference' in health_check:
+	    caller_ref = health_check['CallerReference']
 
         self.logger.info("Storing health check: {0}://{1}:{2}".format(health_check['HealthCheckConfig']['Type'], ipaddr, health_check['HealthCheckConfig']['Port']))
         self.db.execute("insert into route53_healthchecks set healthcheck_id=%s, ip=%s, port=%s, type=%s, request_interval=%s, "
@@ -134,10 +137,10 @@ class Route53Manager(BaseManager):
                         "resource_path=%s, search_string=%s, fqdn=%s, caller_reference=%s",
                         (health_check['Id'], ipaddr, health_check['HealthCheckConfig']['Port'],
                          health_check['HealthCheckConfig']['Type'], health_check['HealthCheckConfig']['RequestInterval'],
-                         health_check['HealthCheckConfig']['FailureThreshold'], resource_path, search_string, fqdn, health_check['CallerReference'],
+                         health_check['HealthCheckConfig']['FailureThreshold'], resource_path, search_string, fqdn, caller_ref,
                          ipaddr, health_check['HealthCheckConfig']['Port'], health_check['HealthCheckConfig']['Type'],
                          health_check['HealthCheckConfig']['RequestInterval'], health_check['HealthCheckConfig']['FailureThreshold'],
-                         resource_path, search_string, fqdn, health_check['CallerReference']))
+                         resource_path, search_string, fqdn, caller_ref))
         self.dbconn.commit()
         self.db.execute("select id from route53_healthchecks where healthcheck_id=%s", (health_check['Id'], ))
         row = self.db.fetchone()
