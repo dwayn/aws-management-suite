@@ -127,8 +127,8 @@ class Route53Manager(BaseManager):
         if 'IPAddress' in health_check['HealthCheckConfig']:
             ipaddr = health_check['HealthCheckConfig']['IPAddress']
 	caller_ref = None
-	if 'CallerReference' in health_check:
-	    caller_ref = health_check['CallerReference']
+	if 'CallerReference' in health_check['HealthCheckConfig']:
+	    caller_ref = health_check['HealthCheckConfig']['CallerReference']
 
         self.logger.info("Storing health check: {0}://{1}:{2}".format(health_check['HealthCheckConfig']['Type'], ipaddr, health_check['HealthCheckConfig']['Port']))
         self.db.execute("insert into route53_healthchecks set healthcheck_id=%s, ip=%s, port=%s, type=%s, request_interval=%s, "
