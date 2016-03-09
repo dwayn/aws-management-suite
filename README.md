@@ -113,12 +113,22 @@ In order from highest to lowest priority:
 ### Enabling bash/zsh completion
 This project makes use of the argcomplete library (https://github.com/kislyuk/argcomplete) to provide dynamic completion. As part of the pip installation,
 the library will be installed, but completion will still need to be enabled. Due to some multi-platform issues I experienced trying to enable global completeion,
-I opted to use specific completion. All that is needed is to add these lines to your .bashrc, .profile or .bash_profile (depending on which your OS uses) and then reload
-your terminal or `source .bashrc` (or .profile/.bash_profile). Using completion is encouraged for interactive users, particularly since many of the argument completions 
-are now dynamic and contextual.
+I opted to use specific completion. For bash you only need to add the following to your .bashrc, .profile or .bash_profile (depending on which your OS uses) and then reload
+your terminal or `source .bashrc` (or .profile/.bash_profile).
 
-`eval "$(register-python-argcomplete ams)"`
-`eval "$(register-python-argcomplete ams-inventory)"`
+    eval "$(register-python-argcomplete ams)"
+    eval "$(register-python-argcomplete ams-inventory)"
+
+For zsh run the following: `activate-global-python-argcomplete --user`
+Then add the following to the end of your .zshrc file:
+
+    autoload bashcompinit
+    bashcompinit
+    source ~/.bash_completion.d/python-argcomplete.sh
+    eval "$(register-python-argcomplete ams)"
+    eval "$(register-python-argcomplete ams-inventory)"
+
+_**Note:** You may need to install argcomplete globally using `sudo pip install argcomplete` to support autocomplete from the shell._
 
 ### Upgrading
 If you have updated the code base, just run `pip install -r requirements.txt` to install any new dependencies and run `ams internals database upgrade` to run the update scripts
