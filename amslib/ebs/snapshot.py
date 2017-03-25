@@ -36,7 +36,7 @@ class SnapshotManager(BaseManager):
 
     def __get_boto_conn(self, region):
         if region not in self.boto_conns:
-            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
+            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.getRegionalSetting(region, 'AWS_ACCESS_KEY'), aws_secret_access_key=self.settings.getRegionalSetting(region, 'AWS_SECRET_KEY'))
         return self.boto_conns[region]
 
 
@@ -96,15 +96,15 @@ class SnapshotManager(BaseManager):
                 pre_command(hostname=vgdata[10], instance_id=vgdata[7])
             elif isinstance(pre_command, types.StringType):
                 sh = SSHManager(self.settings)
-                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
-                stdout, stderr, exit_code = sh.sudo(pre_command, sudo_password=self.settings.SUDO_PASSWORD)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
+                stdout, stderr, exit_code = sh.sudo(pre_command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running snapshot pre_command\n{0}\n{1}".format(pre_command, stderr))
 
             if freeze_fs and vgdata[8] is not None:
                 sh = SSHManager(self.settings)
-                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
-                stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --freeze {0}".format(vgdata[8]), sudo_password=self.settings.SUDO_PASSWORD)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
+                stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --freeze {0}".format(vgdata[8]), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     raise SnapshotError("There was an error running fsfreeze\n{0}".format(stderr))
 
@@ -135,16 +135,16 @@ class SnapshotManager(BaseManager):
                 post_command(hostname=vgdata[10], instance_id=vgdata[7])
             elif isinstance(post_command, types.StringType):
                 sh = SSHManager(self.settings)
-                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
-                stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=self.settings.SUDO_PASSWORD)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
+                stdout, stderr, exit_code = sh.sudo(post_command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     postcmderr = True
                     errmsg = "There was an error running snapshot post_command\n{0}\n{1}".format(post_command, stderr)
 
             if freeze_fs and vgdata[8] is not None:
                 sh = SSHManager(self.settings)
-                sh.connect_instance(instance=vgdata[7], port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
-                stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --unfreeze {0}".format(vgdata[8]), sudo_password=self.settings.SUDO_PASSWORD)
+                sh.connect_instance(instance=vgdata[7], port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
+                stdout, stderr, exit_code = sh.sudo("/sbin/fsfreeze --unfreeze {0}".format(vgdata[8]), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     chained = ""
                     if len(errmsg):

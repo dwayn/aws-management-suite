@@ -13,7 +13,7 @@ class NetworkManager(BaseManager):
 
     def __get_boto_conn(self, region):
         if region not in self.boto_conns:
-            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
+            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.getRegionalSetting(region, 'AWS_ACCESS_KEY'), aws_secret_access_key=self.settings.getRegionalSetting(region, 'AWS_SECRET_KEY'))
         return self.boto_conns[region]
 
     def discovery(self, filter_region=None):

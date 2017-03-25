@@ -14,7 +14,7 @@ class VolumeManager(BaseManager):
 
     def __get_boto_conn(self, region):
         if region not in self.boto_conns:
-            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
+            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.getRegionalSetting(region, 'AWS_ACCESS_KEY'), aws_secret_access_key=self.settings.getRegionalSetting(region, 'AWS_SECRET_KEY'))
         return self.boto_conns[region]
 
 
@@ -178,12 +178,12 @@ class VolumeManager(BaseManager):
             raise VolumeGroupNotFound("Metadata not found for volume_group_id: {0}".format(volume_group_id))
 
         sh = SSHManager(self.settings)
-        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh.connect_instance(instance=instance_id, port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
 
         fs_type = voldata[0][2]
 
         if voldata[0][3] == 'raid':
-            stdout, stderr, exit_code = sh.sudo('ls --color=never /dev/md[0-9]*', sudo_password=self.settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo('ls --color=never /dev/md[0-9]*', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             d = stdout.split(' ')
             current_devices = []
             for i in d:
@@ -210,18 +210,18 @@ class VolumeManager(BaseManager):
                 raid_level = voldata[0][0]
                 stripe_block_size = voldata[0][1]
                 command = '/sbin/mdadm --create {0} --level={1} --chunk={2} --raid-devices={3} {4}'.format(block_device, raid_level, stripe_block_size, devcount, devlist)
-                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
                 command = '/sbin/mkfs.{0} {1}'.format(fs_type, block_device)
-                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
 
             else:
                 # find out if the raid was auto assembled as a new md device before trying to assemble it
-                stdout, stderr, exit_code = sh.sudo('cat /proc/mdstat', sudo_password=self.settings.SUDO_PASSWORD)
+                stdout, stderr, exit_code = sh.sudo('cat /proc/mdstat', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 mdstat = stdout.split('\n')
 
                 dev_found = None
@@ -236,7 +236,7 @@ class VolumeManager(BaseManager):
                     block_device = '/dev/' + dev_found
                 else:
                     command = '/sbin/mdadm --assemble {0} {1}'.format(block_device, devlist)
-                    stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                    stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                     if int(exit_code) != 0:
                         raise RaidError("There was an error creating raid with command:\n{0}\n{1}".format(command, stderr))
 
@@ -244,7 +244,7 @@ class VolumeManager(BaseManager):
             block_device = voldata[0][5]
             if new_raid:
                 command = '/sbin/mkfs.{0} {1}'.format(fs_type, block_device)
-                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+                stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 if int(exit_code) != 0:
                     raise RaidError("There was an error creating filesystem with command:\n{0}\n{1}".format(command, stderr))
 
@@ -284,10 +284,10 @@ class VolumeManager(BaseManager):
         region = self.parse_region_from_availability_zone(availability_zone)
 
         sh = SSHManager(self.settings)
-        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh.connect_instance(instance=instance_id, port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
 
         if not mount_point:
-            stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             mtab = stdout.split("\n")
             for line in mtab:
                 m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
@@ -299,11 +299,11 @@ class VolumeManager(BaseManager):
 
         #TODO mkdir -p of the mount directory
         command = "mkdir -p {0}".format(mount_point)
-        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
         if int(exit_code) != 0:
             raise VolumeMountError("Unable to create mount directory: {0} with error: {1}".format(mount_point, stderr))
         command = 'mount {0} {1} -o {2} -t {3}'.format(block_device, mount_point, mount_options, fs_type)
-        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
         if int(exit_code) != 0:
             raise VolumeMountError("Error mounting volume with command: {0}\n{1}".format(command, stderr))
 
@@ -330,7 +330,8 @@ class VolumeManager(BaseManager):
                           "vg.block_device, "
                           "vg.group_type, "
                           "vg.fs_type, "
-                          "h.instance_id "
+                          "h.instance_id, "
+                          "h.availability_zone "
                           "from hosts h "
                           "join host_volumes hv on h.instance_id=hv.instance_id and hv.volume_group_id=%s "
                           "join volume_groups vg on vg.volume_group_id=hv.volume_group_id", (volume_group_id, ))
@@ -338,19 +339,20 @@ class VolumeManager(BaseManager):
         if not info:
             raise VolumeMountError("instance_id, volume_group_id, or host_volume association not found")
 
-        defined_mount_point, host, block_device, group_type, fs_type, instance_id = info
+        defined_mount_point, host, block_device, group_type, fs_type, instance_id, az = info
         if not block_device:
             raise VolumeMountError("block device is not set for volume group {0}, check that the volume group is attached".format(volume_group_id))
 
+        region = self.parse_region_from_availability_zone(az)
         sh = SSHManager(self.settings)
-        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh.connect_instance(instance=instance_id, port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
 
         if not remove:
             if not mount_point:
                 if defined_mount_point:
                     mount_point = defined_mount_point
                 else:
-                    stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.SUDO_PASSWORD)
+                    stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                     mtab = stdout.split("\n")
                     for line in mtab:
                         m = re.match(block_device_match_pattern.format(block_device.replace('/', '\\/')), line)
@@ -368,7 +370,7 @@ class VolumeManager(BaseManager):
                 raise VolumeMountError("No mount point defined and none can be determined for volume group".format(volume_group_id))
         self.logger.info("Reading /etc/fstab")
         new_fstab_line = "{0} {1} {2} {3}".format(block_device, mount_point, fs_type, mount_options)
-        stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo('cat /etc/fstab', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
 
         # Checking that stdout is not empty is a safety check to make sure that fstab does not get blown away in case there is some issue getting
         # current contents of fstab file. Based on an observed bug that effectively renders an instance useless on reboot
@@ -400,10 +402,10 @@ class VolumeManager(BaseManager):
             if not found and not remove:
                 fstab.append(new_fstab_line)
             self.logger.info("Copying /etc/fstab to /etc/fstab.prev")
-            stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev", sudo_password=self.settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo("mv -f /etc/fstab /etc/fstab.prev", sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             self.logger.info("Writing out new /etc/fstab")
-            sh.sudo("echo '{0}' > /etc/fstab".format("\n".join(fstab).replace("\n\n", "\n")), sudo_password=self.settings.SUDO_PASSWORD)
-            sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.SUDO_PASSWORD)
+            sh.sudo("echo '{0}' > /etc/fstab".format("\n".join(fstab).replace("\n\n", "\n")), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
+            sh.sudo("chmod 0644 /etc/fstab", sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
 
         if not remove:
             self.db.execute("update host_volumes set mount_point=%s where volume_group_id=%s", (mount_point, volume_group_id))
@@ -415,11 +417,11 @@ class VolumeManager(BaseManager):
         # http://superuser.com/questions/287462/how-can-i-make-mdadm-auto-assemble-raid-after-each-boot
         if group_type == 'raid':
             self.logger.info("Reading /etc/mdadm.conf")
-            stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf", sudo_password=self.settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo("cat /etc/mdadm.conf", sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             conf = stdout.split("\n")
             if not remove:
                 self.logger.info("Reading current mdadm devices")
-                stdout, stderr, exit_code = sh.sudo("/sbin/mdadm --detail --scan ", sudo_password=self.settings.SUDO_PASSWORD)
+                stdout, stderr, exit_code = sh.sudo("/sbin/mdadm --detail --scan ", sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                 scan = stdout.split("\n")
 
                 mdadm_line = None
@@ -429,7 +431,7 @@ class VolumeManager(BaseManager):
                         if m.group(1) == block_device:
                             mdadm_line = m.group(0)
                         else:
-                            stdout, stderr, exit_code = sh.sudo("ls -l --color=never {0}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.SUDO_PASSWORD)
+                            stdout, stderr, exit_code = sh.sudo("ls -l --color=never {0}".format(m.group(1)) + " | awk '{print $NF}'", sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
                             if stdout.strip():
                                 if os.path.basename(stdout.strip()) == os.path.basename(block_device):
                                     mdadm_line = m.group(0).replace(m.group(1), block_device)
@@ -452,11 +454,11 @@ class VolumeManager(BaseManager):
                 conf.append(mdadm_line)
 
             self.logger.info("Copying /etc/mdadm.conf to /etc/mdadm.conf.prev")
-            sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev', sudo_password=self.settings.SUDO_PASSWORD)
+            sh.sudo('mv -f /etc/mdadm.conf /etc/mdadm.conf.prev', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             self.logger.info("Writing new /etc/mdadm.conf file")
             for line in conf:
                 if line:
-                    sh.sudo("echo '{0}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.SUDO_PASSWORD)
+                    sh.sudo("echo '{0}' >> /etc/mdadm.conf".format(line), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
 
 
 
@@ -506,7 +508,8 @@ class VolumeManager(BaseManager):
                           "h.availability_zone, "
                           "vg.block_device, "
                           "vg.group_type, "
-                          "vg.fs_type "
+                          "vg.fs_type, "
+                          "h.availability_zone "
                           "from host_volumes hv "
                           "join hosts h on h.instance_id=hv.instance_id "
                           "join volume_groups vg on vg.volume_group_id=hv.volume_group_id "
@@ -515,13 +518,14 @@ class VolumeManager(BaseManager):
         if not data:
             raise VolumeGroupNotFound("Record for volume group {0} not found".format(volume_group_id))
 
-        cur_mount_point, host, instance_id, availability_zone, block_device, volume_group_type, fs_type = data
+        cur_mount_point, host, instance_id, availability_zone, block_device, volume_group_type, fs_type, az = data
+        region = self.parse_region_from_availability_zone(az)
 
         sh = SSHManager(self.settings)
-        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh.connect_instance(instance=instance_id, port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
         block_device_match_pattern = '^([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([^\s]+?)\s+([0-9])\s+([0-9]).*'
 
-        stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo('cat /etc/mtab', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
         mtab = stdout.split("\n")
         block_device_to_unmount = None
         for line in mtab:
@@ -541,7 +545,7 @@ class VolumeManager(BaseManager):
 
         if block_device_to_unmount:
             command = 'umount {0}'.format(block_device_to_unmount)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             if int(exit_code) != 0:
                 raise VolumeMountError("Error unmounting volume with command: {0}\n{1}".format(command, stderr))
             self.logger.info("Volume group {0} unmounted from host {1} ".format(volume_group_id, host))
@@ -561,7 +565,8 @@ class VolumeManager(BaseManager):
                         "vg.group_type, "
                         "vg.block_device, "
                         "v.block_device, "
-                        "volume_id "
+                        "volume_id, "
+                        "h.availability_zone "
                         "from volume_groups vg "
                         "join volumes v using(volume_group_id) "
                         "left join host_volumes hv using(volume_group_id) "
@@ -573,6 +578,8 @@ class VolumeManager(BaseManager):
             raise VolumeGroupNotFound("Volume group {0} not found".format(volume_group_id))
 
         instance_id, host, mount_point, availability_zone, volume_type, block_device = voldata[0][:6]
+        az = voldata[0][8]
+        region = self.parse_region_from_availability_zone(az)
 
         if mount_point and not force:
             raise VolumeMountError("Volume group {0} is currently mounted on {1}, not detaching".format(volume_group_id, mount_point))
@@ -582,9 +589,9 @@ class VolumeManager(BaseManager):
 
         if volume_type == 'raid' and host:
             sh = SSHManager(self.settings)
-            sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+            sh.connect_instance(instance=instance_id, port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
             command = '/sbin/mdadm --stop {0}'.format(block_device)
-            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.SUDO_PASSWORD)
+            stdout, stderr, exit_code = sh.sudo(command=command, sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             if int(exit_code) != 0:
                 raise VolumeMountError("Error stopping the software raid on volume group {0} with command: {1}\n{2}".format(volume_group_id, command, stderr))
 

@@ -3,6 +3,7 @@ import argparse
 import prettytable
 import logging
 import os
+import re
 import ConfigParser
 from errors import *
 import pprint
@@ -38,6 +39,7 @@ class Config:
         self._sources = {}
         self._env_overrides = {}
         self._inifile = None
+        self._regionalOverrides = {}
 
         self.load_legacy()
         self.load_ini()
@@ -50,6 +52,10 @@ class Config:
         self._check_versions()
         self.modules = {}
 
+    def getRegionalSetting(self, region, item):
+        if region in self._regionalOverrides and item in self._regionalOverrides[region]:
+            return self._regionalOverrides[region][item]
+        return getattr(self, item)
 
     def register_module(self, ModuleInstance):
         if not isinstance(ModuleInstance, BaseManager):
@@ -213,6 +219,17 @@ class Config:
         for option in options:
             self._iniconfigs[option] = config.get('CONFIG', option)
 
+        # parse the regional config sections
+        for section in config.sections():
+            parts = re.split("REGION-", section)
+            if len(parts) != 2 or parts[0] != "":
+                continue
+            region = parts[1]
+            if region not in self._regionalOverrides:
+                self._regionalOverrides[region] = {}
+            for option in config.options(section):
+                self._regionalOverrides[region][option] = config.get(section, option)
+
 
     def get_logger(self):
         if not hasattr(self, '_logger'):
@@ -277,7 +294,7 @@ class Config:
                 finalsettings[k] = v
                 self._sources[k] = 'Application Override'
 
-        for k,v in finalsettings.iteritems():
+        for k, v in finalsettings.iteritems():
             setattr(self, k, v)
 
 

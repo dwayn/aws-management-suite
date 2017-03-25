@@ -15,7 +15,7 @@ class InstanceManager(BaseManager):
 
     def __get_boto_conn(self, region):
         if region not in self.boto_conns:
-            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.AWS_ACCESS_KEY, aws_secret_access_key=self.settings.AWS_SECRET_KEY)
+            self.boto_conns[region] = boto.ec2.connect_to_region(region, aws_access_key_id=self.settings.getRegionalSetting(region, 'AWS_ACCESS_KEY'), aws_secret_access_key=self.settings.getRegionalSetting(region, 'AWS_SECRET_KEY'))
         return self.boto_conns[region]
 
     def __subinit__(self):
@@ -265,29 +265,30 @@ class InstanceManager(BaseManager):
         self.db.execute("update hosts set host=%s where instance_id=%s", (hostname, instance_id))
         self.dbconn.commit()
 
-        self.db.execute("select instance_id, host, uname from hosts where instance_id=%s", (instance_id, ))
+        self.db.execute("select instance_id, host, uname, availability_zone from hosts where instance_id=%s", (instance_id, ))
         row = self.db.fetchone()
         if not row:
             self.logger.error("Unable to find instance metadata")
             return
-
+        az = row[3]
+        region = self.parse_region_from_availability_zone(az)
         # if there is a uname set then we will use that rather than the hostname to set the system uname
         uname = row[1]
         if row[2]:
             uname = row[2]
 
         sh = SSHManager(self.settings)
-        sh.connect_instance(instance=instance_id, port=self.settings.SSH_PORT, username=self.settings.SSH_USER, password=self.settings.SSH_PASSWORD, key_filename=self.settings.SSH_KEYFILE)
+        sh.connect_instance(instance=instance_id, port=self.settings.getRegionalSetting(region, 'SSH_PORT'), username=self.settings.getRegionalSetting(region, 'SSH_USER'), password=self.settings.getRegionalSetting(region, 'SSH_PASSWORD'), key_filename=self.settings.getRegionalSetting(region, 'SSH_KEYFILE'))
 
         self.logger.info("Setting the running value for hostname on the instance")
-        stdout, stderr, exit_code = sh.sudo('hostname {0}'.format(uname), sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo('hostname {0}'.format(uname), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
         if int(exit_code) != 0:
             self.logger.error("There was an error setting the running hostname of the instance\n" + stderr)
             return
 
         permanent = False
         # Redhat/CentOS uses a "HOSTNAME=somehost.example.com" line in /etc/sysconfig/network to set hostname permanently
-        stdout, stderr, exit_code = sh.sudo('cat /etc/sysconfig/network', sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo('cat /etc/sysconfig/network', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
         if int(exit_code) == 0:
             self.logger.info("/etc/sysconfig/network file found, modifying HOSTNAME")
             hoststring = "HOSTNAME={0}".format(uname)
@@ -301,17 +302,17 @@ class InstanceManager(BaseManager):
             if not found:
                 lines.append(hoststring)
 
-            sh.sudo('mv -f /etc/sysconfig/network /etc/sysconfig/network.prev', sudo_password=self.settings.SUDO_PASSWORD)
+            sh.sudo('mv -f /etc/sysconfig/network /etc/sysconfig/network.prev', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             for line in lines:
-                sh.sudo('echo {0} >> /etc/sysconfig/network'.format(line), sudo_password=self.settings.SUDO_PASSWORD)
+                sh.sudo('echo {0} >> /etc/sysconfig/network'.format(line), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             permanent = True
 
         # Ubuntu uses "somehost.example.com" as the contents of /etc/hostname to set hostname permanently
-        stdout, stderr, exit_code = sh.sudo('cat /etc/hostname', sudo_password=self.settings.SUDO_PASSWORD)
+        stdout, stderr, exit_code = sh.sudo('cat /etc/hostname', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
         if int(exit_code) == 0:
             self.logger.info("/etc/hostname file found, setting hostname")
-            sh.sudo('cp /etc/hostname /etc/hostname.prev', sudo_password=self.settings.SUDO_PASSWORD)
-            sh.sudo('echo {0} > /etc/hostname'.format(uname), sudo_password=self.settings.SUDO_PASSWORD)
+            sh.sudo('cp /etc/hostname /etc/hostname.prev', sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
+            sh.sudo('echo {0} > /etc/hostname'.format(uname), sudo_password=self.settings.getRegionalSetting(region, 'SUDO_PASSWORD'))
             permanent = True
 
         if permanent:
