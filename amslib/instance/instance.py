@@ -179,9 +179,12 @@ class InstanceManager(BaseManager):
             except boto.exception.EC2ResponseError:
                 continue
             for i in instances:
+                self.store_instance(i, get_unames)
+                if i.state == 'terminated':
+                    self.logger.info("Instance {} terminated".format(i.id))
+                    continue
                 instance_ids.append(i.id)
                 self.logger.info("Found instance {0}".format(i.id))
-                self.store_instance(i, get_unames)
 
             self.db.execute("update hosts set `terminated`=0 where instance_id in ('{0}')".format("','".join(instance_ids)))
             self.dbconn.commit()
