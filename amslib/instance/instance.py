@@ -1026,7 +1026,7 @@ class InstanceManager(BaseManager):
             whereclause = "where `terminated`=0"
 
         if args.operation == 'list':
-            sql = "select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host, tags.name as tagname, tags.value, tags.type from hosts left join tags on tags.resource_id=hosts.instance_id {0} group by instance_id {1}) as h left join tags t on t.resource_id=h.instance_id".format(whereclause, filterclause)
+            sql = "select h.instance_id, h.name, h.host, t.name, t.value, t.type from (select hosts.instance_id, hosts.name, hosts.host from hosts left join tags on tags.resource_id=hosts.instance_id {0} group by instance_id {1}) as h left join tags t on t.resource_id=h.instance_id".format(whereclause, filterclause)
             self.db.execute(sql, queryvars)
             self.logger.debug("Executing query: {0}".format(self.db._last_executed))
 
