@@ -13,14 +13,14 @@ that are not fully addressed by other tools.
 ## Current Features
 EBS Volumes (managed as groups of volumes)
 * Manages groups of one or more ebs volumes as if they were a single volume and handles the underlying group operations for all of the following  
- * Create
- * Delete
- * Attach
- * Detach
- * Automatically creates and configures software raid for multi-volume groups when creating new volume groups
- * Partition and format new volume
- * Mount volume group
- * Unmount volume group
+    * Create
+    * Delete
+    * Attach
+    * Detach
+    * Automatically creates and configures software raid for multi-volume groups when creating new volume groups
+    * Partition and format new volume
+    * Mount volume group
+    * Unmount volume group
 * Internally handles all of the metadata associated with the raid volume configuration, so that when a volume group is attached to an instance, the raid is automatically assembled and system configured
 * Raid support currently requires that `mdadm` package be installed on the destination system
 * Partitioning and formatting require that `mkfs.FILESYSTEM` is available on the system for `FILESYSTEM`, eg. `mkfs.ext3` normally exists on most distributions, but `mkfs.xfs` is only available after installing `xfsprogs`
@@ -36,7 +36,7 @@ EBS Snapshots (managed as groups of snapshots)
 Instance Management
 * Instances can be created using `ams host create`
 * Templates for host creation can be managed using `ams host template ...` functionality
- * `ams host create` accepts a template id or template name when creating an instance, allowing you to create a new instance or set of instance with only a single command line option
+    * `ams host create` accepts a template id or template name when creating an instance, allowing you to create a new instance or set of instance with only a single command line option
 * Instance discovery has been implemented, allowing the host information to be automatically populated
 * Regions and availability_zones information imported into AMS database 
 * Support for viewing the available key pairs for launching instances
@@ -52,7 +52,7 @@ Route53
 
 Instance Tagging
 * Management of instance tags is supported with ability to add/edit/remove tags on single hosts or many with advanced tag based filtering
- * Tags are used by `ams-inventory` to provide groups for hosts in ansible. 
+    * Tags are used by `ams-inventory` to provide groups for hosts in ansible. 
 * A number of operations now allow actions of commands to be filtered by tags
 * Integration of tagging into host creation and templates
 
@@ -70,7 +70,7 @@ VPC
 * A dynamic inventory script has been added that uses the data in the AMS database to power your inventory needs for ansible
 * Dynamic inventory supports managing server group hierarchies (groups of groups and groups of servers)
 * Built in templating for combining tags on hosts into group names and adding hosts to these groups automatically
- * Templating support includes filtering so that templates can apply to hosts with specific tag values
+    * Templating support includes filtering so that templates can apply to hosts with specific tag values
 * Command line management of groups and templates using same script that ansible uses as inventory
 
 SSH client
@@ -87,12 +87,24 @@ Changes that are made are now being tracked in the [CHANGELOG](CHANGELOG.md)
 * The tool requires ssh and sudo access to hosts in order to accomplish tasks like mounting volumes and running system commands to start/stop services (for snapshots)
 * Copy defaults.ini to /etc/ams.ini or ~/ams.ini and edit AWS, SSH and SUDO access credentials
 * A MySQL database needs to be setup for tracking state. The following statements assume that the mysql database and the tool are located on the same host:
- * `CREATE DATABASE ams;` -- Create the schema
- * `GRANT ALL PRIVILEGES ON ams.* TO 'ams_user'@'localhost' IDENTIFIED BY 'ams_pass';` -- (This will create user with username 'ams_user' and password of 'ams_pass' and give access to the new schema created)
+    * `CREATE DATABASE ams;` -- Create the schema
+    * `CREATE USER 'ams_user'@'localhost' IDENTIFIED WITH mysql_native_password BY 'ams_pass';`
+    * `GRANT ALL PRIVILEGES ON ams.* TO 'ams_user'@'localhost';` -- (This will give access to the new schema created)
 * Edit TRACKING_DB credentials in your ams.ini file with the proper credentials for your MySQL database (default settings are configured to match the above grant with standard mysql install)
 * `pip install -r requirements.txt` will install the handful of external dependencies
- * You have option of either running pip install as root or if you have setup a virtualenv for this tool, then you you can run pip install without root in the virtual environment
- * Documentation on setting the tool up with virtualenv is planned for the future
+    * You have option of either running pip install as root or if you have setup a virtualenv for this tool, then you you can run pip install without root in the virtual environment
+    * Documentation on setting the tool up with virtualenv is planned for the future
+    * Troubleshooting mac with homebrew mysql install:
+        * If you run into an issue with installing mysql-python that gives an error like `fatal error: 'my_config.h' file not found` you can do the following to fix it:
+        ---
+        brew install mysql
+        brew unlink mysql
+        brew install mysql-connector-c
+        sed -i -e 's/libs="$libs -l "/libs="$libs -lmysqlclient -lssl -lcrypto"/g' /usr/local/bin/mysql_config
+        pip install requirements.txt
+        brew unlink mysql-connector-c
+        brew link --overwrite mysql
+        ---
 * Suggested: add the path to ams directory to your path or add symlink to `ams` script to a directory in the system path
 * `ams internals database install` will create the current full version of all of the tables
 
@@ -202,8 +214,8 @@ the case of a conflict on tag name the value that is passed as an argument will 
 account the values for a template (overriding template context with passed arguments) when doing completions. 
 
 Required Arguments: --region, --ami-id, --instance-type
-    * VPC Required Arguments: --subnet-id
-    * EC2 Classic Required Arguments: --zone
+* VPC Required Arguments: --subnet-id
+* EC2 Classic Required Arguments: --zone
 
 Arguments:
 
@@ -698,12 +710,12 @@ Required arguments: (--host | --instance), --numvols, --size
 
 Defaults:
 
- * stripe-block-size: `256`  (256k chunk size recommended for performance of EBS stripes using xfs)
- * raid-level: `0`
- * filesystem: `xfs`  (note: currently due to implementation constrictions filesystem must be one of the types that can be formatted using mkfs.*)
- * iops: `None`
- * mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
- * no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
+* stripe-block-size: `256`  (256k chunk size recommended for performance of EBS stripes using xfs)
+* raid-level: `0`
+* filesystem: `xfs`  (note: currently due to implementation constrictions filesystem must be one of the types that can be formatted using mkfs.*)
+* iops: `None`
+* mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
+* no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
 
 
 Arguments:
@@ -745,8 +757,8 @@ Required arguments: volume_group_id, (--host | --instance)
 
 Defaults:
 
- * mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
- * no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
+* mount-point: `None`   (disk will not be mounted and automounting will not be configured if mount-point not provided)
+* no-automount: `false`  (automounting of volumes/raids will be configured in fstab and mdadm.conf by default unless explicitly disabled)
 
 Arguments:
 
@@ -1623,14 +1635,14 @@ Arguments:
 #### Features
 
 * Automatic addition of instances to groups based on the following:
- * Tags on instances in the form `NAME_VALUE`, this includes AWS tags and AMS extended tags but not AMS hostvars type tags
- * AWS Region
- * AWS Availability Zone
- * VPC ID
- * Subnet ID (VPC subnet)
- * AMI ID
- * Instance Type (m1.small, c3.xlarge, etc)
- * Name of instance (value of the Name tag on an instance)
+    * Tags on instances in the form `NAME_VALUE`, this includes AWS tags and AMS extended tags but not AMS hostvars type tags
+    * AWS Region
+    * AWS Availability Zone
+    * VPC ID
+    * Subnet ID (VPC subnet)
+    * AMI ID
+    * Instance Type (m1.small, c3.xlarge, etc)
+    * Name of instance (value of the Name tag on an instance)
 * Automatic addition of mappings for Route53 entries to hosts
 * Management of static group hierarchies that are included in the dynamic inventory
 * Management of templates that are applied to an instance's tags to include instance in a group
@@ -1949,32 +1961,32 @@ Given some hosts with the tags "env", "role" and "type", some examples of templa
 If you have 3 hosts with the following values for the tags:
 
 * hostA
- * env = stage
- * role = webserver
- * type = api
+    * env = stage
+    * role = webserver
+    * type = api
 * hostB 
- * env = production
- * role = database
- * type = primary
- * cluster = backup
+    * env = production
+    * role = database
+    * type = primary
+    * cluster = backup
 * hostC
- * env = dev
- * role = webserver
+    * env = dev
+    * role = webserver
 
 These would be rendered into the following group names for the hosts:
 
 * hostA
- * `stage-webserver-api`
- * `stage_webserver`
- * `foo-stage-api`
+    * `stage-webserver-api`
+    * `stage_webserver`
+    * `foo-stage-api`
 * hostB
- * `production-database-primary`
- * `production_database`
- * `foo-production-primary`
+    * `production-database-primary`
+    * `production_database`
+    * `foo-production-primary`
 * hostC
- * N/A (not all values for the template are present)
- * `dev_webserver`
- * N/A (not all values for the template are present)
+    * N/A (not all values for the template are present)
+    * `dev_webserver`
+    * N/A (not all values for the template are present)
 
 Each host will then be included in the groups for the templates that were fully rendered for that host.
 
@@ -1994,34 +2006,34 @@ Given some hosts with the tags "env", "role" and "type", some examples of filter
 If you have 3 hosts with the following values for the tags:
 
 * hostA
- * env = dev
- * role = webserver
- * type = api
+    * env = dev
+    * role = webserver
+    * type = api
 * hostB 
- * env = production
- * role = database
- * type = primary
- * cluster = backup
+    * env = production
+    * role = database
+    * type = primary
+    * cluster = backup
 * hostC
- * env = dev
- * role = database
- * type = primary
- * cluster = backup
+    * env = dev
+    * role = database
+    * type = primary
+    * cluster = backup
 
 These would be rendered into the following group names for the hosts:
 
 * hostA
- * N/A (env != production)
- * N/A (role != database)
- * `dev_webserver_api_deprecated`
+    * N/A (env != production)
+    * N/A (role != database)
+    * `dev_webserver_api_deprecated`
 * hostB
- * `production-database-primary`
- * N/A (env != production)
- * N/A (type != api)
+    * `production-database-primary`
+    * N/A (env != production)
+    * N/A (type != api)
 * hostC
- * N/A (env != production)
- * `dev-database-combined`
- * N/A (type != api)
+    * N/A (env != production)
+    * `dev-database-combined`
+    * N/A (type != api)
 
 Each host will then be included in the groups for the templates that were fully rendered for that host.
 
