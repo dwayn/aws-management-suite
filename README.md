@@ -95,16 +95,14 @@ Changes that are made are now being tracked in the [CHANGELOG](CHANGELOG.md)
     * You have option of either running pip install as root or if you have setup a virtualenv for this tool, then you you can run pip install without root in the virtual environment
     * Documentation on setting the tool up with virtualenv is planned for the future
     * Troubleshooting mac with homebrew mysql install:
-        * If you run into an issue with installing mysql-python that gives an error like `fatal error: 'my_config.h' file not found` you can do the following to fix it:
-        ---
+        * If you run into an issue with installing mysql-python that gives an error like `fatal error: 'my_config.h' file not found` you can do the following to fix it: ```
         brew install mysql
         brew unlink mysql
         brew install mysql-connector-c
         sed -i -e 's/libs="$libs -l "/libs="$libs -lmysqlclient -lssl -lcrypto"/g' /usr/local/bin/mysql_config
         pip install requirements.txt
         brew unlink mysql-connector-c
-        brew link --overwrite mysql
-        ---
+        brew link --overwrite mysql```
 * Suggested: add the path to ams directory to your path or add symlink to `ams` script to a directory in the system path
 * `ams internals database install` will create the current full version of all of the tables
 
