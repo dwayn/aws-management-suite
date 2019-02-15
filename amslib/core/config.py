@@ -1,4 +1,4 @@
-import MySQLdb
+import pymysql.cursors
 import argparse
 import prettytable
 import logging
@@ -76,10 +76,10 @@ class Config:
                 raise DependencyRequired("boto library out of date, (installed = {0}) (required >= {1}). Run 'pip install -r requirements.txt' to update dependencies.".format(boto.__version__, MINIMUM_BOTO_VERSION))
 
     def load_database(self):
-        dbconn = MySQLdb.connect(host=self.TRACKING_DB['host'],
+        dbconn = pymysql.connect(host=self.TRACKING_DB['host'],
                              port=self.TRACKING_DB['port'],
                              user=self.TRACKING_DB['user'],
-                             passwd=self.TRACKING_DB['pass'],
+                             password=self.TRACKING_DB['pass'],
                              db=self.TRACKING_DB['dbname'])
         db = dbconn.cursor()
         try:

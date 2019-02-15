@@ -3,7 +3,7 @@ import paramiko
 import socket
 import pipes
 from errors import *
-import MySQLdb
+import pymysql.cursors
 
 
 class SSHManager:
@@ -27,11 +27,11 @@ class SSHManager:
 
     def connect_instance(self, instance, port=22, username=None, password=None, key_filename=None, timeout=None, look_for_keys=True):
         if not self.db:
-            self.dbconn = MySQLdb.connect(host=self.settings.TRACKING_DB['host'],
-                                 port=self.settings.TRACKING_DB['port'],
-                                 user=self.settings.TRACKING_DB['user'],
-                                 passwd=self.settings.TRACKING_DB['pass'],
-                                 db=self.settings.TRACKING_DB['dbname'])
+            self.dbconn = pymysql.connect(host=self.settings.TRACKING_DB['host'],
+                             port=self.settings.TRACKING_DB['port'],
+                             user=self.settings.TRACKING_DB['user'],
+                             password=self.settings.TRACKING_DB['pass'],
+                             db=self.settings.TRACKING_DB['dbname'])
             self.db = self.dbconn.cursor()
 
         self.db.execute("select ip_internal, ip_external, vpc_id, subnet_id from hosts where instance_id=%s", (instance, ))

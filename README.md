@@ -91,20 +91,10 @@ Changes that are made are now being tracked in the [CHANGELOG](CHANGELOG.md)
     * `CREATE USER 'ams_user'@'localhost' IDENTIFIED WITH mysql_native_password BY 'ams_pass';`
     * `GRANT ALL PRIVILEGES ON ams.* TO 'ams_user'@'localhost';` -- (This will give access to the new schema created)
 * Edit TRACKING_DB credentials in your ams.ini file with the proper credentials for your MySQL database (default settings are configured to match the above grant with standard mysql install)
+* `sudo pip install argcomplete` if you would like to use the bash completions (highly recommend). If you do not install with sudo, then you will not have the binaries for argcomplete installed and tab completion from the shell will not work.
 * `pip install -r requirements.txt` will install the handful of external dependencies
     * You have option of either running pip install as root or if you have setup a virtualenv for this tool, then you you can run pip install without root in the virtual environment
     * Documentation on setting the tool up with virtualenv is planned for the future
-    * Troubleshooting mac with homebrew mysql install:
-        * If you run into an issue with installing mysql-python that gives an error like `fatal error: 'my_config.h' file not found` you can do the following to fix it: 
-```
-brew install mysql
-brew unlink mysql
-brew install mysql-connector-c
-sed -i -e 's/libs="$libs -l "/libs="$libs -lmysqlclient -lssl -lcrypto"/g' /usr/local/bin/mysql_config
-pip install requirements.txt
-brew unlink mysql-connector-c
-brew link --overwrite mysql
-```
 * Suggested: add the path to ams directory to your path or add symlink to `ams` script to a directory in the system path
 * `ams internals database install` will create the current full version of all of the tables
 

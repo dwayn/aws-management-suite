@@ -2,7 +2,7 @@
 # PYTHON_ARGCOMPLETE_OK
 import argparse
 import argcomplete
-import MySQLdb
+import pymysql.cursors
 import inspect
 import os
 import logging
@@ -30,11 +30,11 @@ settings.register_module(VpcManager(settings))
 amsroot = os.path.realpath(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename))
 
 def upgrade_db(args):
-    dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
-                         port=settings.TRACKING_DB['port'],
-                         user=settings.TRACKING_DB['user'],
-                         passwd=settings.TRACKING_DB['pass'],
-                         db=settings.TRACKING_DB['dbname'])
+    dbconn = pymysql.connect(host=settings.TRACKING_DB['host'],
+                             port=settings.TRACKING_DB['port'],
+                             user=settings.TRACKING_DB['user'],
+                             password=settings.TRACKING_DB['pass'],
+                             db=settings.TRACKING_DB['dbname'])
     db = dbconn.cursor()
     pathstub = os.path.dirname(amsroot) + '/schema/versions/'
     filename_stub = 'db-version-'
@@ -115,11 +115,11 @@ def main():
             raise
 
 def command_config_update(args):
-    dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
-                         port=settings.TRACKING_DB['port'],
-                         user=settings.TRACKING_DB['user'],
-                         passwd=settings.TRACKING_DB['pass'],
-                         db=settings.TRACKING_DB['dbname'])
+    dbconn = pymysql.connect(host=settings.TRACKING_DB['host'],
+                             port=settings.TRACKING_DB['port'],
+                             user=settings.TRACKING_DB['user'],
+                             password=settings.TRACKING_DB['pass'],
+                             db=settings.TRACKING_DB['dbname'])
     db = dbconn.cursor()
 
     db.execute("select `value`, `type`, `configurable` from config where `var`=%s", (args.name, ))
@@ -158,11 +158,11 @@ def command_config_update(args):
 
 
 def command_config_list(args):
-    dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
-                         port=settings.TRACKING_DB['port'],
-                         user=settings.TRACKING_DB['user'],
-                         passwd=settings.TRACKING_DB['pass'],
-                         db=settings.TRACKING_DB['dbname'])
+    dbconn = pymysql.connect(host=settings.TRACKING_DB['host'],
+                             port=settings.TRACKING_DB['port'],
+                             user=settings.TRACKING_DB['user'],
+                             password=settings.TRACKING_DB['pass'],
+                             db=settings.TRACKING_DB['dbname'])
     db = dbconn.cursor()
     db.execute("select `var`,`value`,`type`,`env_overrides`,`description`, if(`configurable`,'yes','no') from config")
     rows = db.fetchall()

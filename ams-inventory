@@ -3,7 +3,7 @@
 
 import argcomplete
 import argparse
-import MySQLdb
+import pymysql.cursors
 import re
 from amslib.core.version import DATABASE_VERSION
 from amslib.core.config import Config
@@ -30,12 +30,13 @@ class AmsInventory:
         return {"_meta" : {"hostvars" : {}}}
 
     def __init__(self):
-        self.dbconn = MySQLdb.connect(host=settings.TRACKING_DB['host'],
-                             port=settings.TRACKING_DB['port'],
-                             user=settings.TRACKING_DB['user'],
-                             passwd=settings.TRACKING_DB['pass'],
-                             db=settings.TRACKING_DB['dbname'])
-        self.db = self.dbconn.cursor(MySQLdb.cursors.DictCursor)
+        self.dbconn = pymysql.connect(host=self.settings.TRACKING_DB['host'],
+                             port=self.settings.TRACKING_DB['port'],
+                             user=self.settings.TRACKING_DB['user'],
+                             password=self.settings.TRACKING_DB['pass'],
+                             db=self.settings.TRACKING_DB['dbname'],
+                             cursorclass=pymysql.cursors.DictCursor)
+        self.db = self.dbconn.cursor()
         self.bm = BaseManager(settings)
 
         self.templates = {}

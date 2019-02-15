@@ -1,4 +1,4 @@
-import MySQLdb
+import pymysql.cursors
 import argparse
 import prettytable
 import logging
@@ -7,10 +7,10 @@ from errors import *
 class BaseManager(object):
     def __init__(self, settings):
         self.settings = settings
-        self.dbconn = MySQLdb.connect(host=self.settings.TRACKING_DB['host'],
+        self.dbconn = pymysql.connect(host=self.settings.TRACKING_DB['host'],
                              port=self.settings.TRACKING_DB['port'],
                              user=self.settings.TRACKING_DB['user'],
-                             passwd=self.settings.TRACKING_DB['pass'],
+                             password=self.settings.TRACKING_DB['pass'],
                              db=self.settings.TRACKING_DB['dbname'])
         self.db = self.dbconn.cursor()
         self.logger = self.get_logger()
