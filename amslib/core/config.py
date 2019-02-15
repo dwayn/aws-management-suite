@@ -1,4 +1,5 @@
 import pymysql.cursors
+from pymysql.err import ProgrammingError, OperationalError
 import argparse
 import prettytable
 import logging
@@ -7,7 +8,6 @@ import re
 import ConfigParser
 from errors import *
 import pprint
-import _mysql_exceptions
 from version import *
 import boto
 from amslib.core.manager import BaseManager
@@ -86,7 +86,7 @@ class Config:
             try:
                 db.execute("select var, value, type, env_overrides from config")
                 rows = db.fetchall()
-            except _mysql_exceptions.OperationalError as e:
+            except OperationalError as e:
                 # this handles the case where the old version of the software is running database version < 16 and identifies that the database needs upgrade rather than install
                 if e.args[0] == 1054:
                     db.execute("select var, value, null, null from config")
@@ -122,7 +122,7 @@ class Config:
 
 
 
-        except _mysql_exceptions.ProgrammingError as e:
+        except ProgrammingError as e:
             if e.args[0] == 1146:
                 self.NEED_INSTALL = True
                 self._logger.critical("Database has not been installed, before continuing you must run: ams internals database install")
@@ -130,7 +130,7 @@ class Config:
             else:
                 raise
 
-        except _mysql_exceptions.OperationalError as e:
+        except OperationalError as e:
             if e.args[0] == 1054:
                 self.NEED_UPGRADE = True
                 self._logger.critical("Database needs to be updated, before continuing you must run: ams internals database upgrade")
